@@ -27,6 +27,9 @@ final class ProviderOnLoop
     /** @var list<\Closure(): void> */
     private array $onClose = [];
 
+    /** @var list<int> the timers of a stop in progress */
+    private array $stopTimers = [];
+
     /**
      * @param  \Closure(string): void  $onStdout
      * @param  \Closure(string): void  $onStderr
@@ -73,21 +76,21 @@ final class ProviderOnLoop
             return $verdict;
         }
         $this->provider->closeInput();
-        $timers = [];
-        $settle = function () use ($verdict, $graceful, &$timers): void {
-            foreach ($timers as $timer) {
+        $settle = function () use ($verdict, $graceful): void {
+            foreach ($this->stopTimers as $timer) {
                 $this->loop->cancel($timer);
             }
+            $this->stopTimers = [];
             if (! $verdict->isSettled()) {
                 $verdict->resolve($this->provider->verdict($graceful()));
             }
         };
         $this->onClose[] = $settle;
-        $timers[] = $this->loop->delay($graceMs / 1000, function () use ($settle, &$timers): void {
+        $this->stopTimers[] = $this->loop->delay($graceMs / 1000, function () use ($settle): void {
             if ($this->provider->exitCode() === null) {
                 $this->kill();
             }
-            $timers[] = $this->loop->delay(self::REPORT_SECONDS, $settle);
+            $this->stopTimers[] = $this->loop->delay(self::REPORT_SECONDS, $settle);
         });
 
         return $verdict;
@@ -139,7 +142,11 @@ final class ProviderOnLoop
         }
         if ($live === [] && ! $this->closed) {
             // Everything ended between two reads: one more read collects the `closed` the provider reports.
-            $this->loop->defer(fn () => $this->closed ? null : $this->pump());
+            $this->loop->defer(function (): void {
+                if (! $this->isClosed()) {
+                    $this->pump();
+                }
+            });
         }
     }
 }
