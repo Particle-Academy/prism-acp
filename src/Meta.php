@@ -96,10 +96,11 @@ final class Meta
      */
     public static function assertModel(string $model): string
     {
-        if (trim($model) === '' || str_starts_with($model, '-')) {
+        // JavaScript's trim: a model of only no-break spaces is as empty there as one of ASCII spaces.
+        if (Support\Js::trim($model) === '' || str_starts_with($model, '-')) {
             throw new \InvalidArgumentException(sprintf(
                 'refusing model %s: a model is a non-empty name that does not start with "-"',
-                json_encode($model, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                Ndjson\Json::encode($model),
             ));
         }
 

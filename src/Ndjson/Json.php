@@ -91,6 +91,15 @@ final class Json
         }, $json);
     }
 
+    /**
+     * An object built here, in the key order JavaScript would give it: array-index keys first, ascending. For an
+     * object whose keys a provider or client chose (server names, header names), built with Object.fromEntries there.
+     */
+    public static function ordered(\stdClass $object): \stdClass
+    {
+        return self::orderObject($object);
+    }
+
     /** An array index in JavaScript's sense: the canonical spelling of an integer from 0 to 2^32 - 2. */
     public static function isArrayIndex(int|string $key): bool
     {
@@ -120,9 +129,12 @@ final class Json
 
             return $value;
         }
-        if (! $value instanceof \stdClass) {
-            return $value;
-        }
+
+        return $value instanceof \stdClass ? self::orderObject($value) : $value;
+    }
+
+    private static function orderObject(\stdClass $value): \stdClass
+    {
         $indexes = [];
         $others = [];
         foreach (get_object_vars($value) as $key => $item) {

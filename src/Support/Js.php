@@ -119,6 +119,25 @@ final class Js
         }
     }
 
+    /**
+     * `string.slice(0, $units)`: the first $units UTF-16 code units. A character the cut would split in two is left
+     * out whole (the reference would keep a lone surrogate, which a PHP string cannot hold).
+     */
+    public static function slice(string $value, int $units): string
+    {
+        $out = '';
+        $length = 0;
+        foreach (mb_str_split($value, 1, 'UTF-8') as $char) {
+            $length += mb_ord($char, 'UTF-8') > 0xFFFF ? 2 : 1;
+            if ($length > $units) {
+                break;
+            }
+            $out .= $char;
+        }
+
+        return $out;
+    }
+
     /** Math.round: the nearest integer, a half rounding toward +infinity. */
     public static function round(float|int $value): float|int
     {

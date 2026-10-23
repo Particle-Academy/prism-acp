@@ -1,0 +1,2767 @@
+{
+ "reference": "prism-acp-ts 0.23.2",
+ "results": [
+  {
+   "name": "initialize with no driver declaration",
+   "log": [
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "initialize",
+       "params": {
+        "protocolVersion": 7
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+       "protocolVersion": 1,
+       "agentInfo": {
+        "name": "golden",
+        "version": "1"
+       },
+       "authMethods": [],
+       "agentCapabilities": {
+        "loadSession": true,
+        "promptCapabilities": {
+         "image": false,
+         "audio": false,
+         "embeddedContext": false
+        }
+       }
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 2,
+       "method": "authenticate",
+       "params": {}
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": null
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": "x",
+       "method": "nope"
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": "x",
+      "error": {
+       "code": -32601,
+       "message": "method not found: nope"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "method": "nope/notify"
+      }
+     }
+    },
+    {
+     "peerProblem": "unhandled notification: nope/notify"
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 3
+      }
+     }
+    },
+    {
+     "peerProblem": "response for unknown id: 3"
+    },
+    {
+     "step": {
+      "client": [
+       1,
+       2
+      ]
+     }
+    },
+    {
+     "peerProblem": "frame is not a JSON-RPC object"
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0"
+      }
+     }
+    },
+    {
+     "peerProblem": "frame has neither a method nor an id"
+    }
+   ]
+  },
+  {
+   "name": "initialize with the Claude declaration",
+   "log": [
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "initialize",
+       "params": {
+        "protocolVersion": 1
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+       "protocolVersion": 1,
+       "agentInfo": {
+        "name": "golden",
+        "version": "1"
+       },
+       "authMethods": [],
+       "agentCapabilities": {
+        "mcpCapabilities": {
+         "http": true,
+         "sse": true
+        },
+        "loadSession": true,
+        "promptCapabilities": {
+         "image": true,
+         "audio": false,
+         "embeddedContext": true
+        }
+       },
+       "_meta": {
+        "particle.academy/driver_capabilities": {
+         "permissionRequests": false,
+         "transcriptReplay": false,
+         "mcpCapabilities": {
+          "http": true,
+          "sse": true
+         },
+         "promptBlocks": [
+          "text",
+          "image",
+          "resource-text"
+         ],
+         "cancel": true
+        }
+       }
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "a turn: updates, then the turn ends and the prompt answers",
+   "log": [
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "session/new",
+       "params": {
+        "cwd": "/work"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "start",
+      {
+       "cwd": "/work",
+       "mcpServers": []
+      }
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+       "sessionId": "s1",
+       "models": {
+        "availableModels": [
+         {
+          "modelId": "default",
+          "name": "Default",
+          "description": "d",
+          "_meta": {
+           "particle.academy/model_info": {
+            "resolvedModel": "claude-x",
+            "isDefault": true
+           }
+          }
+         },
+         {
+          "modelId": "haiku",
+          "name": "Haiku"
+         }
+        ],
+        "currentModelId": null
+       }
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 2,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "hello"
+         },
+         {
+          "type": "text",
+          "text": "world"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "prompt",
+      "hello\nworld"
+     ]
+    },
+    {
+     "step": {
+      "driver": 0,
+      "update": {
+       "sessionUpdate": "agent_message_chunk",
+       "content": {
+        "type": "text",
+        "text": "hi"
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "method": "session/update",
+      "params": {
+       "sessionId": "s1",
+       "update": {
+        "sessionUpdate": "agent_message_chunk",
+        "content": {
+         "type": "text",
+         "text": "hi"
+        }
+       }
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 3,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "again"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "error": {
+       "code": -32602,
+       "message": "session s1 already has a turn in flight"
+      }
+     }
+    },
+    {
+     "step": {
+      "driver": 0,
+      "turnEnd": {
+       "stopReason": "end_turn",
+       "isError": false,
+       "raw": "end_turn"
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+       "stopReason": "end_turn"
+      }
+     }
+    },
+    {
+     "step": {
+      "driver": 0,
+      "stderr": "a line"
+     }
+    },
+    {
+     "stderr": [
+      "s1",
+      "a line"
+     ]
+    },
+    {
+     "step": {
+      "driver": 0,
+      "protocolError": "a lost frame",
+      "recoverable": true
+     }
+    },
+    {
+     "problem": [
+      "s1",
+      "a lost frame",
+      true
+     ]
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 4,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "fail"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "prompt",
+      "fail"
+     ]
+    },
+    {
+     "step": {
+      "driver": 0,
+      "turnEnd": {
+       "stopReason": null,
+       "isError": true,
+       "raw": "rate_limit",
+       "failure": {
+        "reason": "rate_limit",
+        "kind": "rate_limit",
+        "resetsAtMs": 1800000000000
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "error": {
+       "code": -32603,
+       "message": "turn did not complete: rate_limit",
+       "data": {
+        "particle.academy/turn_failure": {
+         "reason": "rate_limit",
+         "kind": "rate_limit",
+         "resetsAtMs": 1800000000000
+        }
+       }
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 5,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "fail"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "prompt",
+      "fail"
+     ]
+    },
+    {
+     "step": {
+      "driver": 0,
+      "turnEnd": {
+       "stopReason": null,
+       "isError": true,
+       "raw": null
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "error": {
+       "code": -32603,
+       "message": "turn did not complete"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 6,
+       "method": "session/set_model",
+       "params": {
+        "sessionId": "s1",
+        "modelId": "haiku"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "setModel",
+      "haiku"
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "result": {}
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 7,
+       "method": "session/set_model",
+       "params": {
+        "sessionId": "s1",
+        "modelId": "-x"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "setModel",
+      "-x"
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "error": {
+       "code": -32602,
+       "message": "refusing model \"-x\""
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 8,
+       "method": "session/set_model",
+       "params": {
+        "sessionId": "s1"
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 8,
+      "error": {
+       "code": -32602,
+       "message": "session/set_model requires a sessionId and a modelId"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "prompts the agent refuses before any turn starts",
+   "log": [
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "session/new",
+       "params": {
+        "cwd": "C:\\work"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "start",
+      {
+       "cwd": "C:\\work",
+       "mcpServers": []
+      }
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+       "sessionId": "s1"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 2,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": []
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "error": {
+       "code": -32602,
+       "message": "session/prompt requires a prompt of content blocks"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 3,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": "text"
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "error": {
+       "code": -32602,
+       "message": "session/prompt requires a prompt of content blocks"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 4,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "image",
+          "mimeType": "image/png",
+          "data": "AAAA"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "error": {
+       "code": -32602,
+       "message": "prompt refused at block 1 (image image/png): this driver does not take images"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 5,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "audio"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "error": {
+       "code": -32602,
+       "message": "prompt refused at block 1 (audio): not a prompt block this driver can send"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 6,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         7
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "error": {
+       "code": -32602,
+       "message": "prompt refused at block 1 (number): not a prompt block this driver can send"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 7,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "nope",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "x"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "error": {
+       "code": -32602,
+       "message": "no such session: nope"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 8,
+       "method": "session/prompt",
+       "params": {
+        "prompt": [
+         {
+          "type": "text",
+          "text": "x"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 8,
+      "error": {
+       "code": -32602,
+       "message": "session/prompt requires a sessionId"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 9,
+       "method": "session/new",
+       "params": {
+        "cwd": "work"
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 9,
+      "error": {
+       "code": -32602,
+       "message": "cwd MUST be an absolute path: work"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 10,
+       "method": "session/new",
+       "params": {}
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 10,
+      "error": {
+       "code": -32602,
+       "message": "cwd is required and MUST be an absolute path"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 11,
+       "method": "session/new"
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 11,
+      "error": {
+       "code": -32602,
+       "message": "cwd is required and MUST be an absolute path"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "content blocks reach a driver that declares them; a refused block refuses the prompt",
+   "log": [
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "start",
+      {
+       "cwd": "/w",
+       "mcpServers": []
+      }
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+       "sessionId": "s1"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 2,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "see"
+         },
+         {
+          "type": "image",
+          "mimeType": "image/png",
+          "data": "iVBORw0KGgo="
+         },
+         {
+          "type": "resource",
+          "resource": {
+           "uri": "file:///a.txt",
+           "text": "body"
+          }
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "prompt",
+      [
+       {
+        "type": "text",
+        "text": "see"
+       },
+       {
+        "type": "image",
+        "mimeType": "image/png",
+        "data": "iVBORw0KGgo="
+       },
+       {
+        "type": "resource",
+        "resource": {
+         "uri": "file:///a.txt",
+         "text": "body"
+        }
+       }
+      ]
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "error": {
+       "code": -32603,
+       "message": "turn did not complete: the agent could not be written to"
+      }
+     }
+    },
+    {
+     "step": {
+      "driver": 0,
+      "turnEnd": {
+       "stopReason": "end_turn",
+       "isError": false,
+       "raw": "end_turn"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 3,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "x"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "prompt",
+      "x"
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "error": {
+       "code": -32602,
+       "message": "prompt refused at block 1 (image/png): the driver will not send it"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 4,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "y"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "prompt",
+      "y"
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "error": {
+       "code": -32603,
+       "message": "turn did not complete: the agent could not be written to"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 5,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "image",
+          "mimeType": "image/bmp",
+          "data": "AA=="
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "error": {
+       "code": -32602,
+       "message": "prompt refused at block 1 (image image/bmp): images must be one of image/png, image/jpeg, image/gif, image/webp"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 6,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "resource",
+          "resource": {
+           "uri": "file:///b",
+           "blob": "AA=="
+          }
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "error": {
+       "code": -32602,
+       "message": "prompt refused at block 1 (resource): this driver does not take binary files"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 7,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "image",
+          "mimeType": "image/png",
+          "data": "not base64!"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "error": {
+       "code": -32602,
+       "message": "prompt refused at block 1 (image image/png): its data is not base64 image bytes"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "cancel: an interrupt that works, one the agent refuses, and a driver that cannot interrupt",
+   "log": [
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "start",
+      {
+       "cwd": "/w",
+       "mcpServers": []
+      }
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+       "sessionId": "s1"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "method": "session/cancel",
+       "params": {
+        "sessionId": "s1"
+       }
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 2,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "long"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "prompt",
+      "long"
+     ]
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "method": "session/cancel",
+       "params": {
+        "sessionId": "s1"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "cancel"
+     ]
+    },
+    {
+     "step": {
+      "driver": 0,
+      "turnEnd": {
+       "stopReason": "end_turn",
+       "isError": false,
+       "raw": "aborted_streaming"
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+       "stopReason": "cancelled"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 3,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "again"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "prompt",
+      "again"
+     ]
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "method": "session/cancel",
+       "params": {
+        "sessionId": "s1"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "cancel"
+     ]
+    },
+    {
+     "problem": [
+      "s1",
+      "turn cancel failed, stopping the agent: the agent refused the interrupt",
+      null
+     ]
+    },
+    {
+     "call": [
+      0,
+      "kill"
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "result": {
+       "stopReason": "cancelled"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 4,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "after"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "error": {
+       "code": -32603,
+       "message": "session s1 has exited"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "method": "session/cancel",
+       "params": {
+        "sessionId": "nope"
+       }
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "method": "session/cancel",
+       "params": {}
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "cancel with a driver that has no interrupt stops the agent",
+   "log": [
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "start",
+      {
+       "cwd": "/w",
+       "mcpServers": []
+      }
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+       "sessionId": "s1"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 2,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "long"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "prompt",
+      "long"
+     ]
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "method": "session/cancel",
+       "params": {
+        "sessionId": "s1"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "kill"
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "result": {
+       "stopReason": "cancelled"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 3,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "x"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "error": {
+       "code": -32603,
+       "message": "session s1 has exited"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "the agent exits mid-turn",
+   "log": [
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "start",
+      {
+       "cwd": "/w",
+       "mcpServers": []
+      }
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+       "sessionId": "s1"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 2,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "x"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "prompt",
+      "x"
+     ]
+    },
+    {
+     "step": {
+      "driver": 0,
+      "exit": null
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "error": {
+       "code": -32603,
+       "message": "turn did not complete: agent exited with code null"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 3,
+       "method": "session/prompt",
+       "params": {
+        "sessionId": "s1",
+        "prompt": [
+         {
+          "type": "text",
+          "text": "x"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "error": {
+       "code": -32603,
+       "message": "session s1 has exited"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 4,
+       "method": "session/set_model",
+       "params": {
+        "sessionId": "s1",
+        "modelId": "x"
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "error": {
+       "code": -32602,
+       "message": "no live session: s1"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "permission requests: the client's answer, its reason, and answers that are not answers",
+   "log": [
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "start",
+      {
+       "cwd": "/w",
+       "mcpServers": []
+      }
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+       "sessionId": "s1"
+      }
+     }
+    },
+    {
+     "step": {
+      "driver": 0,
+      "permission": {
+       "toolCall": {
+        "toolCallId": "t1",
+        "title": "Bash: ls"
+       },
+       "options": [
+        {
+         "optionId": "allow_once",
+         "name": "Allow once",
+         "kind": "allow_once"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "method": "session/request_permission",
+      "id": 1,
+      "params": {
+       "sessionId": "s1",
+       "toolCall": {
+        "toolCallId": "t1",
+        "title": "Bash: ls"
+       },
+       "options": [
+        {
+         "optionId": "allow_once",
+         "name": "Allow once",
+         "kind": "allow_once"
+        }
+       ]
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "result": {
+        "outcome": {
+         "outcome": "selected",
+         "optionId": "allow_once"
+        }
+       }
+      }
+     }
+    },
+    {
+     "permission": [
+      0,
+      {
+       "outcome": "selected",
+       "optionId": "allow_once"
+      }
+     ]
+    },
+    {
+     "step": {
+      "driver": 0,
+      "permission": {
+       "toolCall": {
+        "toolCallId": "t2"
+       },
+       "options": [],
+       "_meta": {
+        "k": 1
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "method": "session/request_permission",
+      "id": 2,
+      "params": {
+       "sessionId": "s1",
+       "toolCall": {
+        "toolCallId": "t2"
+       },
+       "options": [],
+       "_meta": {
+        "k": 1
+       }
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 2,
+       "result": {
+        "outcome": {
+         "outcome": "cancelled"
+        },
+        "_meta": {
+         "particle.academy/permission_reason": "limit reached"
+        }
+       }
+      }
+     }
+    },
+    {
+     "permission": [
+      0,
+      {
+       "outcome": "cancelled",
+       "reason": "limit reached"
+      }
+     ]
+    },
+    {
+     "step": {
+      "driver": 0,
+      "permission": {
+       "toolCall": {
+        "toolCallId": "t3"
+       },
+       "options": []
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "method": "session/request_permission",
+      "id": 3,
+      "params": {
+       "sessionId": "s1",
+       "toolCall": {
+        "toolCallId": "t3"
+       },
+       "options": []
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 3,
+       "result": {
+        "outcome": {
+         "outcome": "selected"
+        },
+        "_meta": {
+         "particle.academy/permission_reason": "x"
+        }
+       }
+      }
+     }
+    },
+    {
+     "permission": [
+      0,
+      {
+       "outcome": "cancelled"
+      }
+     ]
+    },
+    {
+     "step": {
+      "driver": 0,
+      "permission": {
+       "toolCall": {
+        "toolCallId": "t4"
+       },
+       "options": []
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "method": "session/request_permission",
+      "id": 4,
+      "params": {
+       "sessionId": "s1",
+       "toolCall": {
+        "toolCallId": "t4"
+       },
+       "options": []
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 4,
+       "result": {
+        "outcome": {
+         "outcome": "selected",
+         "optionId": "reject_once"
+        },
+        "_meta": {
+         "particle.academy/permission_reason": ""
+        }
+       }
+      }
+     }
+    },
+    {
+     "permission": [
+      0,
+      {
+       "outcome": "selected",
+       "optionId": "reject_once"
+      }
+     ]
+    },
+    {
+     "step": {
+      "driver": 0,
+      "permission": {
+       "toolCall": {
+        "toolCallId": "t5"
+       },
+       "options": []
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "method": "session/request_permission",
+      "id": 5,
+      "params": {
+       "sessionId": "s1",
+       "toolCall": {
+        "toolCallId": "t5"
+       },
+       "options": []
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 5,
+       "error": {
+        "code": -32000,
+        "message": "client gone"
+       }
+      }
+     }
+    },
+    {
+     "permissionError": [
+      0,
+      "client gone"
+     ]
+    },
+    {
+     "step": {
+      "driver": 0,
+      "permission": {
+       "toolCall": {
+        "toolCallId": "t6"
+       },
+       "options": []
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "method": "session/request_permission",
+      "id": 6,
+      "params": {
+       "sessionId": "s1",
+       "toolCall": {
+        "toolCallId": "t6"
+       },
+       "options": []
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 6,
+       "result": null
+      }
+     }
+    },
+    {
+     "permission": [
+      0,
+      {
+       "outcome": "cancelled"
+      }
+     ]
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 99,
+       "result": {}
+      }
+     }
+    },
+    {
+     "peerProblem": "response for unknown id: 99"
+    }
+   ]
+  },
+  {
+   "name": "session/load: what it refuses, and what it opens",
+   "log": [
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "start",
+      {
+       "cwd": "/w",
+       "mcpServers": []
+      }
+     ]
+    },
+    {
+     "problem": [
+      "s1",
+      "the agent could not report its models (no model list)",
+      true
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "result": {
+       "sessionId": "s1"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 2,
+       "method": "session/load",
+       "params": {
+        "cwd": "/w",
+        "sessionId": "s1"
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "error": {
+       "code": -32602,
+       "message": "session s1 is already open and its agent is still running"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 3,
+       "method": "session/load",
+       "params": {
+        "cwd": "/w",
+        "sessionId": "11111111-1111-4111-8111-111111111111"
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "error": {
+       "code": -32602,
+       "message": "session 11111111-1111-4111-8111-111111111111 is already open as s1 and its agent is still running"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 4,
+       "method": "session/load",
+       "params": {
+        "cwd": "/w",
+        "sessionId": "sess_4_1700000000000"
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "error": {
+       "code": -32602,
+       "message": "sess_4_1700000000000 is an ACP session id minted by this server and cannot be resumed by the provider. Resume with the CLI's own session id, sent as 'particle.academy/cli_session_id' in the _meta of the first session/update of the original session."
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 5,
+       "method": "session/load",
+       "params": {
+        "cwd": "/w",
+        "sessionId": "22222222-2222-4222-8222-222222222222"
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "error": {
+       "code": -32602,
+       "message": "cannot resume 22222222-2222-4222-8222-222222222222: not in the store"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 6,
+       "method": "session/load",
+       "params": {
+        "cwd": "/w",
+        "sessionId": "33333333-3333-4333-8333-333333333333"
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      1,
+      "start",
+      {
+       "cwd": "/w",
+       "mcpServers": [],
+       "resumeSessionId": "33333333-3333-4333-8333-333333333333"
+      }
+     ]
+    },
+    {
+     "problem": [
+      "33333333-3333-4333-8333-333333333333",
+      "the agent could not report its models (no model list)",
+      true
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "result": {}
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 7,
+       "method": "session/load",
+       "params": {
+        "cwd": "/w"
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "error": {
+       "code": -32602,
+       "message": "session/load requires a sessionId"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 8,
+       "method": "session/load",
+       "params": {
+        "cwd": "/w",
+        "sessionId": "44444444-4444-4444-8444-444444444444",
+        "mcpServers": [
+         {
+          "type": "sse",
+          "name": "s",
+          "url": "https://x.test",
+          "headers": []
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 8,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: SSE transport is not supported by this driver"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 9,
+       "method": "session/load",
+       "params": {
+        "cwd": "/w",
+        "sessionId": "44444444-4444-4444-8444-444444444444",
+        "mcpServers": null
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 9,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: must be an array"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 10,
+       "method": "session/load",
+       "params": {
+        "cwd": "/w",
+        "sessionId": "44444444-4444-4444-8444-444444444444",
+        "mcpServers": [
+         {
+          "type": "http",
+          "name": "h",
+          "url": "https://x.test/mcp",
+          "headers": [
+           {
+            "name": "Authorization",
+            "value": "Bearer z"
+           }
+          ]
+         },
+         {
+          "name": "local",
+          "command": "/bin/tool",
+          "args": [
+           "--x"
+          ],
+          "env": [
+           {
+            "name": "TOKEN",
+            "value": "t"
+           }
+          ]
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      2,
+      "start",
+      {
+       "cwd": "/w",
+       "mcpServers": [
+        {
+         "type": "http",
+         "name": "h",
+         "url": "https://x.test/mcp",
+         "headers": [
+          {
+           "name": "Authorization",
+           "value": "Bearer z"
+          }
+         ]
+        },
+        {
+         "name": "local",
+         "command": "/bin/tool",
+         "args": [
+          "--x"
+         ],
+         "env": [
+          {
+           "name": "TOKEN",
+           "value": "t"
+          }
+         ]
+        }
+       ],
+       "resumeSessionId": "44444444-4444-4444-8444-444444444444"
+      }
+     ]
+    },
+    {
+     "problem": [
+      "44444444-4444-4444-8444-444444444444",
+      "the agent could not report its models (no model list)",
+      true
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 10,
+      "result": {}
+     }
+    },
+    {
+     "step": {
+      "driver": 1,
+      "exit": 0
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 11,
+       "method": "session/load",
+       "params": {
+        "cwd": "/w",
+        "sessionId": "44444444-4444-4444-8444-444444444444"
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 11,
+      "error": {
+       "code": -32602,
+       "message": "session 44444444-4444-4444-8444-444444444444 is already open and its agent is still running"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "MCP server lists that are refused, naming the field",
+   "log": [
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": {}
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 1,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: must be an array"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 2,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         7
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 2,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 0 must be an object"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 3,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "name": " "
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 3,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 0.name must be a non-empty string without NUL"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 4,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "name": "a",
+          "command": "/x",
+          "args": [],
+          "env": []
+         },
+         {
+          "name": "a",
+          "command": "/y",
+          "args": [],
+          "env": []
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 1 has a duplicate server name"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 5,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "type": "http",
+          "name": "h",
+          "url": "ftp://x",
+          "headers": []
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 5,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 0.url must be an absolute HTTP or HTTPS URL"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 6,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "type": "ws",
+          "name": "h"
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 6,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 0 has an unsupported transport"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 7,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "name": "c",
+          "command": "relative",
+          "args": [],
+          "env": []
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 7,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 0.command must be an absolute path"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 8,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "name": "c",
+          "command": "/x",
+          "args": "--a",
+          "env": []
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 8,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 0.args must be an array"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 9,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "name": "c",
+          "command": "/x",
+          "args": [],
+          "env": [
+           {
+            "name": "A=B",
+            "value": "v"
+           }
+          ]
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 9,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 0.env contains an invalid name"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 10,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "type": "http",
+          "name": "h",
+          "url": "https://x",
+          "headers": [
+           {
+            "name": "X",
+            "value": "a"
+           },
+           {
+            "name": "x",
+            "value": "b"
+           }
+          ]
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 10,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 0.headers contains duplicate names"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 11,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "type": "http",
+          "name": "h",
+          "url": "https://x",
+          "headers": [
+           {
+            "name": "Bad Name",
+            "value": "a"
+           }
+          ]
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 11,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 0.headers contains an invalid name"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 12,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "type": "http",
+          "name": "h",
+          "url": "https://x",
+          "headers": [
+           {
+            "name": "X",
+            "value": "a\r\nInjected: 1"
+           }
+          ]
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 12,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 0.headers contains an invalid header value"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 13,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "name": "c",
+          "command": "/x",
+          "args": [
+           "a\u0000b"
+          ],
+          "env": []
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 13,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 0.args must be a string without NUL"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 14,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "type": "stdio",
+          "name": "c",
+          "command": "D:/tools/x.exe",
+          "args": [],
+          "env": []
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "call": [
+      0,
+      "start",
+      {
+       "cwd": "/w",
+       "mcpServers": [
+        {
+         "name": "c",
+         "command": "D:/tools/x.exe",
+         "args": [],
+         "env": []
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 14,
+      "result": {
+       "sessionId": "s1"
+      }
+     }
+    },
+    {
+     "step": {
+      "client": {
+       "jsonrpc": "2.0",
+       "id": 15,
+       "method": "session/new",
+       "params": {
+        "cwd": "/w",
+        "mcpServers": [
+         {
+          "type": null,
+          "name": "c",
+          "command": "/x",
+          "args": [],
+          "env": []
+         }
+        ]
+       }
+      }
+     }
+    },
+    {
+     "sent": {
+      "jsonrpc": "2.0",
+      "id": 15,
+      "error": {
+       "code": -32602,
+       "message": "invalid mcpServers: entry 0 has an unsupported transport"
+      }
+     }
+    }
+   ]
+  }
+ ]
+}

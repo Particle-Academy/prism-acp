@@ -1,0 +1,182 @@
+{
+ "about": "Scripted ACP sessions run through the reference's AcpAgent and this port's, with a fake driver. A step is a client frame, a driver event, or a driver behaviour; tools/golden/agent.mjs records what the reference sent and did.",
+ "scenarios": [
+  {
+   "name": "initialize with no driver declaration",
+   "capabilities": null,
+   "steps": [
+    {"client": {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": 7}}},
+    {"client": {"jsonrpc": "2.0", "id": 2, "method": "authenticate", "params": {}}},
+    {"client": {"jsonrpc": "2.0", "id": "x", "method": "nope"}},
+    {"client": {"jsonrpc": "2.0", "method": "nope/notify"}},
+    {"client": {"jsonrpc": "2.0", "id": 3}},
+    {"client": [1, 2]},
+    {"client": {"jsonrpc": "2.0"}}
+   ]
+  },
+  {
+   "name": "initialize with the Claude declaration",
+   "capabilities": {"permissionRequests": false, "transcriptReplay": false, "mcpCapabilities": {"http": true, "sse": true}, "promptBlocks": ["text", "image", "resource-text"], "cancel": true},
+   "steps": [
+    {"client": {"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": 1}}}
+   ]
+  },
+  {
+   "name": "a turn: updates, then the turn ends and the prompt answers",
+   "capabilities": {"permissionRequests": false, "transcriptReplay": false, "promptBlocks": ["text"]},
+   "driver": {"models": {"availableModels": [{"modelId": "default", "name": "Default", "description": "d", "resolvedModel": "claude-x", "isDefault": true}, {"modelId": "haiku", "name": "Haiku"}], "currentModelId": null}},
+   "steps": [
+    {"client": {"jsonrpc": "2.0", "id": 1, "method": "session/new", "params": {"cwd": "/work"}}},
+    {"client": {"jsonrpc": "2.0", "id": 2, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "hello"}, {"type": "text", "text": "world"}]}}},
+    {"driver": 0, "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": "hi"}}},
+    {"client": {"jsonrpc": "2.0", "id": 3, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "again"}]}}},
+    {"driver": 0, "turnEnd": {"stopReason": "end_turn", "isError": false, "raw": "end_turn"}},
+    {"driver": 0, "stderr": "a line"},
+    {"driver": 0, "protocolError": "a lost frame", "recoverable": true},
+    {"client": {"jsonrpc": "2.0", "id": 4, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "fail"}]}}},
+    {"driver": 0, "turnEnd": {"stopReason": null, "isError": true, "raw": "rate_limit", "failure": {"reason": "rate_limit", "kind": "rate_limit", "resetsAtMs": 1800000000000}}},
+    {"client": {"jsonrpc": "2.0", "id": 5, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "fail"}]}}},
+    {"driver": 0, "turnEnd": {"stopReason": null, "isError": true, "raw": null}},
+    {"client": {"jsonrpc": "2.0", "id": 6, "method": "session/set_model", "params": {"sessionId": "s1", "modelId": "haiku"}}},
+    {"client": {"jsonrpc": "2.0", "id": 7, "method": "session/set_model", "params": {"sessionId": "s1", "modelId": "-x"}}},
+    {"client": {"jsonrpc": "2.0", "id": 8, "method": "session/set_model", "params": {"sessionId": "s1"}}}
+   ]
+  },
+  {
+   "name": "prompts the agent refuses before any turn starts",
+   "capabilities": {"permissionRequests": false, "transcriptReplay": false, "promptBlocks": ["text"]},
+   "driver": {"models": "none"},
+   "steps": [
+    {"client": {"jsonrpc": "2.0", "id": 1, "method": "session/new", "params": {"cwd": "C:\\work"}}},
+    {"client": {"jsonrpc": "2.0", "id": 2, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": []}}},
+    {"client": {"jsonrpc": "2.0", "id": 3, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": "text"}}},
+    {"client": {"jsonrpc": "2.0", "id": 4, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "image", "mimeType": "image/png", "data": "AAAA"}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 5, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "audio"}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 6, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [7]}}},
+    {"client": {"jsonrpc": "2.0", "id": 7, "method": "session/prompt", "params": {"sessionId": "nope", "prompt": [{"type": "text", "text": "x"}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 8, "method": "session/prompt", "params": {"prompt": [{"type": "text", "text": "x"}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 9, "method": "session/new", "params": {"cwd": "work"}}},
+    {"client": {"jsonrpc": "2.0", "id": 10, "method": "session/new", "params": {}}},
+    {"client": {"jsonrpc": "2.0", "id": 11, "method": "session/new"}}
+   ]
+  },
+  {
+   "name": "content blocks reach a driver that declares them; a refused block refuses the prompt",
+   "capabilities": {"permissionRequests": false, "transcriptReplay": false, "promptBlocks": ["text", "image", "resource-text"]},
+   "driver": {"models": "none", "promptThrows": [null, "refused", "error"]},
+   "steps": [
+    {"client": {"jsonrpc": "2.0", "id": 1, "method": "session/new", "params": {"cwd": "/w"}}},
+    {"client": {"jsonrpc": "2.0", "id": 2, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "see"}, {"type": "image", "mimeType": "image/png", "data": "iVBORw0KGgo="}, {"type": "resource", "resource": {"uri": "file:///a.txt", "text": "body"}}]}}},
+    {"driver": 0, "turnEnd": {"stopReason": "end_turn", "isError": false, "raw": "end_turn"}},
+    {"client": {"jsonrpc": "2.0", "id": 3, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "x"}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 4, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "y"}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 5, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "image", "mimeType": "image/bmp", "data": "AA=="}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 6, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "resource", "resource": {"uri": "file:///b", "blob": "AA=="}}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 7, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "image", "mimeType": "image/png", "data": "not base64!"}]}}}
+   ]
+  },
+  {
+   "name": "cancel: an interrupt that works, one the agent refuses, and a driver that cannot interrupt",
+   "capabilities": {"permissionRequests": false, "transcriptReplay": false},
+   "driver": {"models": "none", "cancel": ["ok", "reject"]},
+   "steps": [
+    {"client": {"jsonrpc": "2.0", "id": 1, "method": "session/new", "params": {"cwd": "/w"}}},
+    {"client": {"jsonrpc": "2.0", "method": "session/cancel", "params": {"sessionId": "s1"}}},
+    {"client": {"jsonrpc": "2.0", "id": 2, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "long"}]}}},
+    {"client": {"jsonrpc": "2.0", "method": "session/cancel", "params": {"sessionId": "s1"}}},
+    {"driver": 0, "turnEnd": {"stopReason": "end_turn", "isError": false, "raw": "aborted_streaming"}},
+    {"client": {"jsonrpc": "2.0", "id": 3, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "again"}]}}},
+    {"client": {"jsonrpc": "2.0", "method": "session/cancel", "params": {"sessionId": "s1"}}},
+    {"client": {"jsonrpc": "2.0", "id": 4, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "after"}]}}},
+    {"client": {"jsonrpc": "2.0", "method": "session/cancel", "params": {"sessionId": "nope"}}},
+    {"client": {"jsonrpc": "2.0", "method": "session/cancel", "params": {}}}
+   ]
+  },
+  {
+   "name": "cancel with a driver that has no interrupt stops the agent",
+   "capabilities": {"permissionRequests": false, "transcriptReplay": false},
+   "driver": {"models": "none", "cancel": "none"},
+   "steps": [
+    {"client": {"jsonrpc": "2.0", "id": 1, "method": "session/new", "params": {"cwd": "/w"}}},
+    {"client": {"jsonrpc": "2.0", "id": 2, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "long"}]}}},
+    {"client": {"jsonrpc": "2.0", "method": "session/cancel", "params": {"sessionId": "s1"}}},
+    {"client": {"jsonrpc": "2.0", "id": 3, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "x"}]}}}
+   ]
+  },
+  {
+   "name": "the agent exits mid-turn",
+   "capabilities": {"permissionRequests": false, "transcriptReplay": false},
+   "driver": {"models": "none"},
+   "steps": [
+    {"client": {"jsonrpc": "2.0", "id": 1, "method": "session/new", "params": {"cwd": "/w"}}},
+    {"client": {"jsonrpc": "2.0", "id": 2, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "x"}]}}},
+    {"driver": 0, "exit": null},
+    {"client": {"jsonrpc": "2.0", "id": 3, "method": "session/prompt", "params": {"sessionId": "s1", "prompt": [{"type": "text", "text": "x"}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 4, "method": "session/set_model", "params": {"sessionId": "s1", "modelId": "x"}}}
+   ]
+  },
+  {
+   "name": "permission requests: the client's answer, its reason, and answers that are not answers",
+   "capabilities": {"permissionRequests": true, "transcriptReplay": false},
+   "driver": {"models": "none"},
+   "steps": [
+    {"client": {"jsonrpc": "2.0", "id": 1, "method": "session/new", "params": {"cwd": "/w"}}},
+    {"driver": 0, "permission": {"toolCall": {"toolCallId": "t1", "title": "Bash: ls"}, "options": [{"optionId": "allow_once", "name": "Allow once", "kind": "allow_once"}]}},
+    {"client": {"jsonrpc": "2.0", "id": 1, "result": {"outcome": {"outcome": "selected", "optionId": "allow_once"}}}},
+    {"driver": 0, "permission": {"toolCall": {"toolCallId": "t2"}, "options": [], "_meta": {"k": 1}}},
+    {"client": {"jsonrpc": "2.0", "id": 2, "result": {"outcome": {"outcome": "cancelled"}, "_meta": {"particle.academy/permission_reason": "limit reached"}}}},
+    {"driver": 0, "permission": {"toolCall": {"toolCallId": "t3"}, "options": []}},
+    {"client": {"jsonrpc": "2.0", "id": 3, "result": {"outcome": {"outcome": "selected"}, "_meta": {"particle.academy/permission_reason": "x"}}}},
+    {"driver": 0, "permission": {"toolCall": {"toolCallId": "t4"}, "options": []}},
+    {"client": {"jsonrpc": "2.0", "id": 4, "result": {"outcome": {"outcome": "selected", "optionId": "reject_once"}, "_meta": {"particle.academy/permission_reason": ""}}}},
+    {"driver": 0, "permission": {"toolCall": {"toolCallId": "t5"}, "options": []}},
+    {"client": {"jsonrpc": "2.0", "id": 5, "error": {"code": -32000, "message": "client gone"}}},
+    {"driver": 0, "permission": {"toolCall": {"toolCallId": "t6"}, "options": []}},
+    {"client": {"jsonrpc": "2.0", "id": 6, "result": null}},
+    {"client": {"jsonrpc": "2.0", "id": 99, "result": {}}}
+   ]
+  },
+  {
+   "name": "session/load: what it refuses, and what it opens",
+   "capabilities": {"permissionRequests": false, "transcriptReplay": false, "mcpCapabilities": {"http": true, "sse": false}},
+   "driver": {"models": "reject", "cliSessionId": "11111111-1111-4111-8111-111111111111"},
+   "probe": {"22222222-2222-4222-8222-222222222222": {"existence": "absent", "detail": "not in the store"}, "33333333-3333-4333-8333-333333333333": {"existence": "indeterminate", "detail": "unreadable"}},
+   "steps": [
+    {"client": {"jsonrpc": "2.0", "id": 1, "method": "session/new", "params": {"cwd": "/w"}}},
+    {"client": {"jsonrpc": "2.0", "id": 2, "method": "session/load", "params": {"cwd": "/w", "sessionId": "s1"}}},
+    {"client": {"jsonrpc": "2.0", "id": 3, "method": "session/load", "params": {"cwd": "/w", "sessionId": "11111111-1111-4111-8111-111111111111"}}},
+    {"client": {"jsonrpc": "2.0", "id": 4, "method": "session/load", "params": {"cwd": "/w", "sessionId": "sess_4_1700000000000"}}},
+    {"client": {"jsonrpc": "2.0", "id": 5, "method": "session/load", "params": {"cwd": "/w", "sessionId": "22222222-2222-4222-8222-222222222222"}}},
+    {"client": {"jsonrpc": "2.0", "id": 6, "method": "session/load", "params": {"cwd": "/w", "sessionId": "33333333-3333-4333-8333-333333333333"}}},
+    {"client": {"jsonrpc": "2.0", "id": 7, "method": "session/load", "params": {"cwd": "/w"}}},
+    {"client": {"jsonrpc": "2.0", "id": 8, "method": "session/load", "params": {"cwd": "/w", "sessionId": "44444444-4444-4444-8444-444444444444", "mcpServers": [{"type": "sse", "name": "s", "url": "https://x.test", "headers": []}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 9, "method": "session/load", "params": {"cwd": "/w", "sessionId": "44444444-4444-4444-8444-444444444444", "mcpServers": null}}},
+    {"client": {"jsonrpc": "2.0", "id": 10, "method": "session/load", "params": {"cwd": "/w", "sessionId": "44444444-4444-4444-8444-444444444444", "mcpServers": [{"type": "http", "name": "h", "url": "https://x.test/mcp", "headers": [{"name": "Authorization", "value": "Bearer z"}]}, {"name": "local", "command": "/bin/tool", "args": ["--x"], "env": [{"name": "TOKEN", "value": "t"}]}]}}},
+    {"driver": 1, "exit": 0},
+    {"client": {"jsonrpc": "2.0", "id": 11, "method": "session/load", "params": {"cwd": "/w", "sessionId": "44444444-4444-4444-8444-444444444444"}}}
+   ]
+  },
+  {
+   "name": "MCP server lists that are refused, naming the field",
+   "capabilities": {"permissionRequests": false, "transcriptReplay": false, "mcpCapabilities": {"http": true, "sse": true}},
+   "driver": {"models": "none"},
+   "steps": [
+    {"client": {"jsonrpc": "2.0", "id": 1, "method": "session/new", "params": {"cwd": "/w", "mcpServers": {}}}},
+    {"client": {"jsonrpc": "2.0", "id": 2, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [7]}}},
+    {"client": {"jsonrpc": "2.0", "id": 3, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"name": " "}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 4, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"name": "a", "command": "/x", "args": [], "env": []}, {"name": "a", "command": "/y", "args": [], "env": []}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 5, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"type": "http", "name": "h", "url": "ftp://x", "headers": []}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 6, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"type": "ws", "name": "h"}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 7, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"name": "c", "command": "relative", "args": [], "env": []}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 8, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"name": "c", "command": "/x", "args": "--a", "env": []}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 9, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"name": "c", "command": "/x", "args": [], "env": [{"name": "A=B", "value": "v"}]}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 10, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"type": "http", "name": "h", "url": "https://x", "headers": [{"name": "X", "value": "a"}, {"name": "x", "value": "b"}]}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 11, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"type": "http", "name": "h", "url": "https://x", "headers": [{"name": "Bad Name", "value": "a"}]}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 12, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"type": "http", "name": "h", "url": "https://x", "headers": [{"name": "X", "value": "a\r\nInjected: 1"}]}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 13, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"name": "c", "command": "/x", "args": ["a\u0000b"], "env": []}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 14, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"type": "stdio", "name": "c", "command": "D:/tools/x.exe", "args": [], "env": []}]}}},
+    {"client": {"jsonrpc": "2.0", "id": 15, "method": "session/new", "params": {"cwd": "/w", "mcpServers": [{"type": null, "name": "c", "command": "/x", "args": [], "env": []}]}}}
+   ]
+  }
+ ]
+}
