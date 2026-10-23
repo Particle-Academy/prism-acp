@@ -29,7 +29,6 @@ final class Stdio
     public static function serve(mixed $input, mixed $output, \Closure $agent, ?\Closure $onProtocolError = null, ?Loop $loop = null): array
     {
         $loop ??= Loop::get();
-        $framer = new NdjsonFramer;
         $peer = new JsonRpcPeer(
             send: function (mixed $message) use ($output): void {
                 $line = NdjsonFramer::encodeLine($message);
@@ -42,55 +41,15 @@ final class Stdio
                 }
                 fflush($output);
             },
-            onProtocolError: fn (string $problem) => $onProtocolError?->__invoke($problem),
+            onProtocolError: function (string $problem) use ($onProtocolError): void {
+                $onProtocolError?->__invoke($problem);
+            },
             loop: $loop,
         );
         $served = $agent($peer);
-        $closed = new Deferred($loop);
+        $connection = new StdioConnection($input, $peer, $served, $onProtocolError, $loop);
 
-        $deliver = function (array $frames) use ($peer, $onProtocolError): void {
-            foreach ($frames as $frame) {
-                if (! $frame->ok) {
-                    $onProtocolError?->__invoke($frame->error === null ? 'NDJSON frame could not be read' : $frame->error->message);
-
-                    continue;
-                }
-                $peer->receive($frame->value);
-            }
-        };
-        $watcher = null;
-        $finish = function (bool $flush, string $reason) use (&$watcher, $loop, $framer, $deliver, $served, $peer, $closed): void {
-            if ($closed->isSettled()) {
-                return;
-            }
-            if ($watcher !== null) {
-                $loop->cancel($watcher);
-            }
-            // Flush first: a client's last message may have no trailing newline.
-            if ($flush) {
-                $deliver($framer->end());
-            }
-            // Every session's agent outlives this stream unless it is told otherwise.
-            $served->closeAll();
-            $peer->fail(new \RuntimeException($reason));
-            $closed->resolve(null);
-        };
-        stream_set_blocking($input, false);
-        $watcher = $loop->onReadable($input, function () use ($input, $framer, $deliver, $finish): void {
-            $chunk = @fread($input, 65536);
-            if ($chunk !== false && $chunk !== '') {
-                $deliver($framer->push($chunk));
-
-                return;
-            }
-            if ($chunk === false) {
-                $finish(false, 'client input failed');
-            } elseif (feof($input)) {
-                $finish(true, 'client disconnected');
-            }
-        });
-
-        return ['agent' => $served, 'peer' => $peer, 'closed' => $closed];
+        return ['agent' => $served, 'peer' => $peer, 'closed' => $connection->closed];
     }
 
     /**
