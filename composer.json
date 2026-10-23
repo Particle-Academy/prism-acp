@@ -1,0 +1,45 @@
+{
+    "name": "particle-academy/prism-acp",
+    "description": "Speak the Agent Client Protocol to a coding-agent CLI the user has already signed in to. No API key, no third-party adapter. Laravel-compatible, not Laravel-reliant.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["acp", "agent-client-protocol", "claude", "codex", "prism", "laravel"],
+    "require": {
+        "php": "^8.2",
+        "ext-json": "*",
+        "ext-mbstring": "*"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.30",
+        "pestphp/pest": "^3.0|^4.0",
+        "phpstan/phpstan": "^2.0"
+    },
+    "suggest": {
+        "ext-pcntl": "Required on Linux: the process-tree supervisor forks the provider into its own session.",
+        "ext-posix": "Required on Linux: the process-tree supervisor uses setsid and signals the provider's tree.",
+        "laravel/framework": "Optional: Prism\\Acp\\Laravel\\PrismAcpServiceProvider binds the drivers and config. The core never needs it."
+    },
+    "autoload": {
+        "psr-4": {
+            "Prism\\Acp\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "@php vendor/bin/pest",
+        "types": "@php vendor/bin/phpstan analyse",
+        "format": "@php vendor/bin/pint"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
