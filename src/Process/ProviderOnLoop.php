@@ -63,11 +63,10 @@ final class ProviderOnLoop
      * Close input, give the provider $graceMs to exit on its own, terminate the tree, and settle with the verdict once
      * the tree is reported empty (or the wait for the report gives up).
      *
-     * @return Deferred<StopVerdict>
+     * @return Deferred<mixed> settles with a StopVerdict
      */
     public function stop(int $graceMs = 5000): Deferred
     {
-        /** @var Deferred<StopVerdict> $verdict */
         $verdict = new Deferred($this->loop);
         $graceful = fn (): bool => $this->provider->exitCode() !== null && ! $this->killed;
         if ($this->closed) {

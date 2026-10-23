@@ -11,6 +11,6 @@ final class Turn
 {
     public bool $cancelled = false;
 
-    /** @param Deferred<TurnOutcome> $settle */
+    /** @param Deferred<mixed> $settle settles with the TurnOutcome */
     public function __construct(public readonly Deferred $settle) {}
 }

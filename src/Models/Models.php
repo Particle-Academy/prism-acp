@@ -103,6 +103,42 @@ final class Models
     }
 
     /**
+     * A model state, checked: what a driver's Deferred delivered is only trusted once it has this shape. Throws
+     * ModelListError otherwise, so a malformed list is reported as no list rather than passed on.
+     *
+     * @return ModelState
+     */
+    public static function state(mixed $state): array
+    {
+        $available = is_array($state) ? ($state['availableModels'] ?? null) : null;
+        $current = is_array($state) ? ($state['currentModelId'] ?? null) : null;
+        if (! is_array($available) || ! array_is_list($available) || ($current !== null && ! is_string($current))) {
+            throw new ModelListError('the agent reported a model list of the wrong shape');
+        }
+        $models = [];
+        foreach ($available as $model) {
+            if (! is_array($model) || ! is_string($model['modelId'] ?? null) || ! is_string($model['name'] ?? null)) {
+                throw new ModelListError('the agent reported a model list of the wrong shape');
+            }
+            $checked = ['modelId' => $model['modelId'], 'name' => $model['name']];
+            foreach (['description', 'resolvedModel'] as $field) {
+                if (isset($model[$field])) {
+                    if (! is_string($model[$field])) {
+                        throw new ModelListError('the agent reported a model list of the wrong shape');
+                    }
+                    $checked[$field] = $model[$field];
+                }
+            }
+            if (($model['isDefault'] ?? null) === true) {
+                $checked['isDefault'] = true;
+            }
+            $models[] = $checked;
+        }
+
+        return ['availableModels' => $models, 'currentModelId' => $current];
+    }
+
+    /**
      * The driver's model state in ACP's shape: what ACP's model info has no field for rides in `_meta`.
      *
      * @param  ModelState  $state

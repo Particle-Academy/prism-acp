@@ -161,7 +161,7 @@ final class AcpAgent
                 return self::object($result);
             }
 
-            return [...$result, 'models' => Models::acp($models->await())];
+            return [...$result, 'models' => Models::acp(Models::state($models->await()))];
         } catch (\Throwable $cause) {
             $this->protocolError($id, "the agent could not report its models ({$cause->getMessage()})", true);
 
@@ -324,7 +324,6 @@ final class AcpAgent
 
         $content = $this->promptContent(Js::get($params, 'prompt'));
 
-        /** @var Deferred<TurnOutcome> $settle */
         $settle = new Deferred($this->loop);
         $session->turn = new Turn($settle);
         try {
@@ -339,6 +338,9 @@ final class AcpAgent
             $settle->resolve(new TurnOutcome(null, true, $cause->getMessage()));
         }
         $outcome = $settle->await();
+        if (! $outcome instanceof TurnOutcome) {
+            throw new RpcError(RpcError::INTERNAL_ERROR, 'turn did not complete');
+        }
 
         if ($outcome->stopReason === null) {
             // The reason, when the provider gave one, is structured in `data`, so a client need not parse the message.

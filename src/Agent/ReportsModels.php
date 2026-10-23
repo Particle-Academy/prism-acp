@@ -9,13 +9,13 @@ use Prism\Acp\Async\Deferred;
 /**
  * A driver that says which models the signed-in account offers, and can switch the live session's model.
  *
- * @phpstan-import-type ModelState from \Prism\Acp\Models\Models
+ * The values arrive through Deferred, which cannot carry a type: Models::state() checks a model state where it is used.
  */
 interface ReportsModels
 {
-    /** @return Deferred<ModelState> */
+    /** @return Deferred<mixed> settles with a model state (see Models::state) */
     public function modelState(): Deferred;
 
-    /** @return Deferred<null> */
+    /** @return Deferred<mixed> settles with null once switched; rejects if the agent refused */
     public function setModel(string $modelId): Deferred;
 }

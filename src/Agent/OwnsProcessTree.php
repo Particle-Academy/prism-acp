@@ -14,7 +14,7 @@ interface OwnsProcessTree
     /**
      * End the agent and its whole tree, and say whether anything is left: close input, wait the grace, terminate.
      *
-     * @return Deferred<StopVerdict>
+     * @return Deferred<mixed> settles with a StopVerdict
      */
     public function stop(int $graceMs = 5000): Deferred;
 

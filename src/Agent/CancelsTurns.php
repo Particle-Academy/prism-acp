@@ -13,6 +13,6 @@ use Prism\Acp\Async\Deferred;
  */
 interface CancelsTurns
 {
-    /** @return Deferred<null> settles once the agent accepted the interrupt; rejects if it refused */
+    /** @return Deferred<mixed> settles (with null) once the agent accepted the interrupt; rejects if it refused */
     public function cancel(): Deferred;
 }
