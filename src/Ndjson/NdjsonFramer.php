@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Prism\Acp\Ndjson;
 
+use Prism\Acp\Support\Js;
+
 /**
  * NDJSON framing for the Agent Client Protocol: one JSON value per line, newline-delimited.
  *
@@ -16,7 +18,9 @@ namespace Prism\Acp\Ndjson;
  *    credential.
  *
  * Blank lines are skipped. PHP strings are bytes, so the cap is measured in bytes by construction, and a multi-byte
- * character split across two chunks is simply held in the buffer until its line completes.
+ * character split across two chunks is simply held in the buffer until its line completes. A completed line is
+ * measured after malformed UTF-8 is replaced, as the reference measures it; a line still accumulating is measured raw,
+ * which differs only for a line that is both malformed and within a few bytes of the cap.
  *
  * JSON objects decode to stdClass, never to arrays: `{}` and `[]` are different values on the wire, and a frame
  * re-encoded by this package must come out as the same JSON the reference produces.
@@ -61,8 +65,10 @@ final class NdjsonFramer
      */
     public static function parseLine(string $line): ?Frame
     {
+        // Measured and parsed as the reference sees the line: after Node's decoder has replaced malformed UTF-8.
+        $line = Js::scrub($line);
         $text = str_ends_with($line, "\r") ? substr($line, 0, -1) : $line;
-        if (trim($text) === '') {
+        if (Js::trim($text) === '') {
             return null;
         }
 

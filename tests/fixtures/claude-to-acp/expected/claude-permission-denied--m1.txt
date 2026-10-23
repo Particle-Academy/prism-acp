@@ -1,0 +1,2 @@
+{"sessionUpdate":"tool_call_update","toolCallId":"hasOwnProperty","status":"failed","_meta":{"particle.academy/permission_denied":{"tool_name":"","providerTextSanitized":true}}}
+UNMAPPED []

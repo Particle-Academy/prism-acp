@@ -1,0 +1,2 @@
+{"sessionUpdate":"notice","notice":{"level":"debug","message":"turn complete"},"_meta":{"particle.academy/unmapped_frame":{"reason":"usage_update needs a context size","usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":false,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":"😀"},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0,"error":[1,"x"]},"inference_geo":"","iterations":["Killshell"],"speed":"standard","fallback_credit":null}}}}
+UNMAPPED []

@@ -1,6 +1,9 @@
 * text=auto eol=lf
 *.cs text eol=lf
+# Fixtures are the exact bytes the reference read: a deliberate \r must survive checkout.
+/tests/fixtures/** -text
 /tests export-ignore
 /phpunit.xml export-ignore
 /phpstan.neon.dist export-ignore
 /pint.json export-ignore
+/tools export-ignore
