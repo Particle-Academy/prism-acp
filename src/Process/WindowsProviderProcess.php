@@ -199,6 +199,11 @@ final class WindowsProviderProcess implements ProviderProcess
         }
         $this->finish();
 
+        return $this->verdict($graceful);
+    }
+
+    public function verdict(bool $graceful): StopVerdict
+    {
         if ($this->emptyCount !== null) {
             return new StopVerdict($graceful, $this->emptyCount === 0, $this->emptyCount, true);
         }
@@ -206,6 +211,23 @@ final class WindowsProviderProcess implements ProviderProcess
         // The supervisor ended without reporting. Its job handle closed with it, so the kernel ended the tree,
         // but nobody observed that.
         return new StopVerdict($graceful, true, null, false);
+    }
+
+    public function streams(): array
+    {
+        $streams = [];
+        foreach ([[$this->stdout, $this->stdoutEof], [$this->stderr, $this->stderrEof], [$this->control, $this->controlEof]] as [$stream, $eof]) {
+            if (! $eof && is_resource($stream)) {
+                $streams[] = $stream;
+            }
+        }
+
+        return $streams;
+    }
+
+    public function exitCode(): ?int
+    {
+        return $this->exitCode;
     }
 
     public function kill(): void

@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
+use Prism\Acp\Async\Deferred;
+use Prism\Acp\Async\Loop;
 use Prism\Acp\Env\ChildEnv;
 use Prism\Acp\Process\ProcessTreeException;
+use Prism\Acp\Process\ProviderOnLoop;
 use Prism\Acp\Process\ProviderProcess;
 use Prism\Acp\Process\WindowsProviderProcess;
 
@@ -159,6 +162,68 @@ describe('Windows: a stop ends the whole tree, and says so', function () {
         $pids = pidsIn($dir.'/pids', 3);
         unset($provider);
         expect(survivors($pids))->toBe([]);
+    });
+})->skip(PHP_OS_FAMILY !== 'Windows' || nodeBinary() === null, 'Windows, with node for the tree fixture');
+
+describe('Windows: on an event loop', function () {
+    it('delivers output as it arrives, and stops the tree without blocking the loop', function () {
+        $dir = treeDir();
+        $loop = new Loop;
+        $out = '';
+        $closed = false;
+        $onLoop = new ProviderOnLoop(launchTree($dir), $loop,
+            onStdout: function (string $chunk) use (&$out): void {
+                $out .= $chunk;
+            },
+            onStderr: fn (string $chunk) => null,
+            onExited: fn (int $code) => null,
+            onClosed: function () use (&$closed): void {
+                $closed = true;
+            },
+        );
+        $pids = pidsIn($dir.'/pids', 3);
+        $onLoop->provider->write("ping\n");
+        // A closure, not an arrow function: an arrow function would capture $out once, empty, and wait forever.
+        $end = microtime(true) + 15;
+        $loop->run(function () use (&$out, $end): bool {
+            return str_contains($out, 'echo:ping') || microtime(true) > $end;
+        });
+
+        // A timer that must still fire while the stop waits out its grace.
+        $ticks = 0;
+        $tick = function () use ($loop, &$ticks, &$tick): void {
+            $ticks++;
+            $loop->delay(0.02, $tick);
+        };
+        $loop->delay(0.02, $tick);
+        $verdict = $onLoop->stop(300)->await();
+
+        expect($verdict->toArray())->toBe(['graceful' => false, 'empty' => true, 'survivors' => 0, 'verified' => true])
+            ->and($closed)->toBeTrue()
+            ->and($ticks)->toBeGreaterThan(5)
+            ->and(survivors($pids))->toBe([]);
+    });
+
+    it('reports a natural exit and its code, then closes', function () {
+        $dir = treeDir();
+        $loop = new Loop;
+        $exited = null;
+        $closed = new Deferred($loop);
+        $onLoop = new ProviderOnLoop(launchTree($dir, ['EXIT_ON_EOF' => '1']), $loop,
+            onStdout: fn (string $chunk) => null,
+            onStderr: fn (string $chunk) => null,
+            onExited: function (int $code) use (&$exited): void {
+                $exited = $code;
+            },
+            onClosed: fn () => $closed->resolve(true),
+        );
+        $pids = pidsIn($dir.'/pids', 3);
+        $onLoop->provider->closeInput();
+        $closed->await();
+
+        expect($exited)->toBe(7)
+            ->and($onLoop->stop()->await()->toArray())->toBe(['graceful' => true, 'empty' => true, 'survivors' => 0, 'verified' => true])
+            ->and(survivors($pids))->toBe([]);
     });
 })->skip(PHP_OS_FAMILY !== 'Windows' || nodeBinary() === null, 'Windows, with node for the tree fixture');
 

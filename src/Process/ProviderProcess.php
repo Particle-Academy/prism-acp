@@ -33,9 +33,29 @@ interface ProviderProcess
     /** Whether the provider and its supervisor can still produce anything. */
     public function isOpen(): bool;
 
-    /** Close stdin, wait the grace, terminate the tree, and return what was found. */
+    /**
+     * Close stdin, wait the grace, terminate the tree, and return what was found. This BLOCKS for up to the grace and
+     * the report; on an event loop, use ProviderOnLoop::stop() instead.
+     */
     public function stop(int $graceMs = 5000): StopVerdict;
 
     /** Terminate the whole tree now, without waiting for the verdict. */
     public function kill(): void;
+
+    /**
+     * The streams still able to produce something, for an event loop to watch: read(0.0) when one is readable. A
+     * stream that reached its end is no longer listed, so a watcher never spins on it.
+     *
+     * @return list<resource>
+     */
+    public function streams(): array;
+
+    /** The provider's exit code once it exited on its own; null while running, or when it was terminated. */
+    public function exitCode(): ?int;
+
+    /**
+     * The verdict from what has been observed so far: for a stop driven by an event loop, called once the provider
+     * is closed (or the wait for its report gave up).
+     */
+    public function verdict(bool $graceful): StopVerdict;
 }
