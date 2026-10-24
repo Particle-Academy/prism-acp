@@ -21,6 +21,7 @@ final readonly class ClaudeDriverOptions
      * @param  list<string>|null  $permissionPrompts  ask before these tools run (single identifiers), or ['*'] for every tool
      * @param  list<string>  $allowedTools
      * @param  list<string>  $disallowedTools
+     * @param  list<string>  $disabledMcpServers  trusted host policy, never ACP input
      */
     public function __construct(
         /** The agent's working directory: absolute. */
@@ -41,6 +42,7 @@ final readonly class ClaudeDriverOptions
         public ?string $phpBinary = null,
         public array $allowedTools = [],
         public array $disallowedTools = [],
+        public array $disabledMcpServers = [],
     ) {}
 
     /**
@@ -65,6 +67,7 @@ final readonly class ClaudeDriverOptions
             phpBinary: $this->phpBinary,
             allowedTools: $this->allowedTools,
             disallowedTools: $this->disallowedTools,
+            disabledMcpServers: $this->disabledMcpServers,
         );
     }
 }

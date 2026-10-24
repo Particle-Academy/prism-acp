@@ -127,6 +127,40 @@ final class ClaudeHarness
 }
 
 describe('ClaudeDriver against a process', function () {
+    it('combines selective inherited MCP denial and wildcard approval in one private settings file', function () {
+        $h = new ClaudeHarness(new Loop, ['disabledMcpServers' => ['blocked'], 'permissionPrompts' => ['*']],
+            static fn (): PermissionOutcome => PermissionOutcome::selected('allow_once'));
+        $settingsPath = null;
+        try {
+            $h->driver->start();
+            $h->turn('settings');
+            $settings = json_decode($h->said(), true, flags: JSON_THROW_ON_ERROR);
+            $args = $h->cli()[0]['argv'];
+            $at = array_search('--settings', $args, true);
+            $settingsPath = $args[$at + 1];
+            expect(array_count_values($args)['--settings'])->toBe(1)
+                ->and($settings['deniedMcpServers'])->toBe([['serverName' => 'blocked']])
+                ->and($settings['hooks']['PreToolUse'][0]['matcher'])->toBe('')
+                ->and(is_file($settingsPath))->toBeTrue();
+            $h->turn('hook FutureTool');
+            expect($h->permissionRequests)->toHaveCount(1);
+        } finally {
+            $h->finish();
+        }
+        expect(is_file($settingsPath))->toBeFalse();
+    });
+
+    it('writes selective inherited denial without creating a permission hook when none was configured', function () {
+        $h = new ClaudeHarness(new Loop, ['disabledMcpServers' => ['blocked']]);
+        try {
+            $h->driver->start();
+            $h->turn('settings');
+            expect(json_decode($h->said(), true, flags: JSON_THROW_ON_ERROR))->toBe(['deniedMcpServers' => [['serverName' => 'blocked']]]);
+        } finally {
+            $h->finish();
+        }
+    });
+
     it('runs the CLI with exactly the documented flags, its model, and none of the outranking credentials', function () {
         $h = new ClaudeHarness(new Loop, ['model' => 'haiku', 'permissionMode' => 'dontAsk', 'allowedTools' => ['Read', 'Grep'], 'disallowedTools' => ['Bash']]);
         $h->driver->start();

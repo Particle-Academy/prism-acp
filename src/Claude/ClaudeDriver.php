@@ -81,6 +81,9 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
 
     private readonly Loop $loop;
 
+    /** @var list<string> */
+    private readonly array $disabledMcpServers;
+
     private ?ProviderOnLoop $provider = null;
 
     private bool $started = false;
@@ -131,6 +134,7 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         ?Loop $loop = null,
     ) {
         $this->loop = $loop ?? Loop::get();
+        $this->disabledMcpServers = McpServers::readDisabled($options->disabledMcpServers, $options->mcpServers);
         $this->framer = new NdjsonFramer;
         $this->mapper = new ClaudeToAcp;
         $this->failures = new ClaudeTurnFailures;
@@ -290,15 +294,24 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
             }
             $settingsPath = null;
             $tools = $this->options->permissionPrompts;
-            if ($tools !== null) {
+            if ($tools !== null || $this->disabledMcpServers !== []) {
                 $directory = PrivateDirectory::create('prism-acp-approve-');
                 $this->approvalDirectory = $directory;
                 $hookPath = $directory.DIRECTORY_SEPARATOR.'approve.php';
                 $settingsPath = $directory.DIRECTORY_SEPARATOR.'settings.json';
-                self::writeNew($hookPath, Approvals::HOOK_SCRIPT);
-                $this->approvalFiles[] = $hookPath;
-                self::writeNew($settingsPath, Json::encode(Approvals::settings(self::phpBinary($this->options->phpBinary), $hookPath, $tools)));
+                $settings = [];
+                if ($tools !== null) {
+                    self::writeNew($hookPath, Approvals::HOOK_SCRIPT);
+                    $this->approvalFiles[] = $hookPath;
+                    $settings = Approvals::settings(self::phpBinary($this->options->phpBinary), $hookPath, $tools);
+                }
+                if ($this->disabledMcpServers !== []) {
+                    $settings['deniedMcpServers'] = array_map(static fn (string $name): array => ['serverName' => $name], $this->disabledMcpServers);
+                }
+                self::writeNew($settingsPath, Json::encode($settings));
                 $this->approvalFiles[] = $settingsPath;
+            }
+            if ($tools !== null) {
                 $ask = $this->events->onRequestPermission;
                 $this->approvals = ApprovalServer::forDirectory($directory, function (\stdClass $input) use ($ask): Deferred {
                     if ($ask !== null) {

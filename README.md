@@ -1,21 +1,21 @@
 # Prism ACP for PHP
 
-Speak the Agent Client Protocol to the Claude CLI you have already signed in to, from plain PHP or an application
+Speak the Agent Client Protocol to the Claude or Codex CLI you have already signed in to, from plain PHP or an application
 that uses PHP. The core has no third-party runtime dependencies and does not require Laravel or an API key.
 
-**Initial Windows / Claude preview.** This release does not implement the Codex driver or Linux/macOS process
-containment. Those platforms are refused before a provider starts. Laravel applications can use the core classes;
+**Windows preview for Claude and Codex subscriptions.** Linux/macOS process containment is not implemented;
+those platforms are refused before a provider starts. Laravel applications can use the core classes;
 automatic service-provider discovery and an artisan command are not included. The pre-release API may change.
 
 ## Install
 
 ```sh
-composer require particle-academy/prism-acp:0.1.0-alpha.2
+composer require particle-academy/prism-acp:0.1.0-alpha.3
 ```
 
 Requires PHP 8.2 or newer, `ext-ctype`, `ext-json`, `ext-mbstring`, Windows with the .NET Framework 4 C# compiler, and an installed,
-signed-in Claude CLI. The supervisor is compiled locally from the included C# source and hash-checked on every
-launch. Node is needed only if the chosen Claude installation is an npm shim; it is not a PHP runtime dependency.
+signed-in Claude or Codex CLI. The supervisor is compiled locally from the included C# source and hash-checked on every
+launch. Node is needed only if the chosen installation is an npm shim; it is not a PHP runtime dependency.
 
 ## Run as an ACP agent
 
@@ -23,17 +23,25 @@ Configure your ACP client to start this command with an absolute working directo
 
 ```sh
 php vendor/bin/prism-acp --cwd=C:/Projects/my-app --model=haiku
+php vendor/bin/prism-acp --provider=codex --cwd=C:/Projects/my-app
 ```
 
 The client exchanges newline-delimited JSON on stdin/stdout. Diagnostics use stderr. `--help` and `--version` do
-not launch Claude. `--claude-binary=C:/absolute/path/claude.exe` selects a particular installation. Unknown options
+not launch a provider. Claude is the default. `--claude-binary=C:/absolute/path/claude.exe` and
+`--codex-binary=C:/absolute/path/codex.exe` select particular installations. Unknown options
 are refused. The server supports `initialize`, `session/new`, `session/load`, `session/prompt`, `session/cancel`
-and `session/set_model`; model choices come from the CLI's initialize response.
+and `session/set_model`; model choices come from Claude's initialize response or Codex's model catalog.
 
-The CLI requests permission through the ACP client before every tool call. Only an explicit `allow_once` answer
+The Claude CLI requests permission through the ACP client before every tool call. Only an explicit `allow_once` answer
 allows the tool; cancellation, a missing handler, malformed replies and hook failures block it. Reasons accompany
 both allow and deny. This is a tool-approval mechanism, not an operating-system sandbox: a permitted command has
 the signed-in user's permissions. Use a trusted ACP client and working directory.
+
+Codex uses `on-request` approval and its own sandbox default. Its five native command/file/permission approval
+families map to the choices shown by the ACP client; only an offered choice can allow. Cancellation and missing,
+invalid or failed handlers deny. Unsupported MCP elicitation is explicitly declined. Cancelling a turn interrupts
+that turn and keeps the app-server and native thread available for another prompt. Loading a native thread replays
+its paged transcript; Claude does not provide transcript replay through this driver.
 
 ## Embed the agent
 
@@ -60,6 +68,24 @@ Load your application's Composer autoloader before this example. `permissionProm
 tool identifiers, such as `['Bash', 'Write']`. Omitting it leaves permission handling to Claude's own configuration;
 an embedding application must choose its policy deliberately. Explicit per-session MCP configuration is supported.
 
+For Codex, use `CodexDriverOptions` and `CodexDriver` from `Prism\Acp\Codex` in the same factory, with
+`driverCapabilities: CodexDriver::CAPABILITIES`. The constructor also accepts trusted `approvalPolicy`, `sandbox`,
+`mcpToolApproval` and `turnInactivityTimeoutMs` options. `never` with `danger-full-access` removes approvals and
+Codex's sandbox; choose those options only as host policy. The default ten-minute inactivity timer pauses while
+native work or an approval is outstanding. Typed prompts accept text, images and text resources; images use private
+temporary files removed when the driver stops. API-key mode is not part of this release.
+
+Both option classes accept `disabledMcpServers: ['inherited-name']` as trusted host policy. `forSession()` preserves
+that policy and copies only the ACP cwd, explicit servers and resume id. Other inherited servers remain available.
+Claude combines this deny list and its approval hooks in one private settings file. Codex reads effective inherited
+transports before setting `enabled: false`; malformed configuration refuses startup rather than silently dropping policy.
+
+Codex HTTP MCP bearer headers are rebound to a fresh variable in each child's environment and removed from thread
+configuration. The same config disables shell snapshots and preserves effective shell policy while excluding precisely
+those variables from model-run commands. Conflicting shell `set` assignments and malformed or mixed filter policies
+refuse startup. This protects against an inherited bearer selector overriding an explicit session token. It is not
+an operating-system credential vault: trusted native providers and code with the same user's access remain in the boundary.
+
 ## Process ownership and environment
 
 Every provider and the Windows stdin relay enter a Job Object before their first instruction. Kill-on-close and
@@ -74,9 +100,11 @@ Temporary approval/MCP files have restricted permissions. The package emits no t
 
 ## Verification and limits
 
-Tests compare the PHP mapper's bytes against published `@particle-academy/prism-acp` 0.24.1, using real capture
+Tests compare the PHP mapper's bytes against published `@particle-academy/prism-acp` 0.25.0, using real Claude capture
 fixtures from its corresponding source commit, hostile mutations and 648 reader cases. Agent scenarios compare
 requests, permissions and failures against that reference. CI regenerates these expectations and fails on drift.
+Codex scenarios exercise the published driver's actual state machine through synthetic protocol frames, including
+outbound RPC, updates, approvals, failures and MCP policy. They are synthetic scenarios, not native turn captures.
 The reference version is explicit; this is not a claim of complete TypeScript feature parity.
 
 Windows CI runs fake-provider protocol and real process-tree tests, including a host hard kill while relay input
@@ -84,9 +112,19 @@ stays open. Ubuntu checks the portable primitives and verifies that unsupported 
 No CI job signs in to a provider or runs a live model turn. A prior local Windows Claude session and resume were
 dogfooded in Prism Labs; native Linux live verification has not been performed.
 
-Three JSON differences from JavaScript are intentional: lone UTF-16 surrogates are rejected; NUL-led object keys
-are rejected; nesting is limited to 512. Binary resource prompts and transcript replay are not supported.
-Codex rate-limit/failure readers exist as primitives, but there is no runnable Codex driver in this release.
+From a source checkout, the optional `node tools/native/codex-mcp.mjs PHP_EXE CODEX_EXE [INSTALLED_AUTOLOAD]`
+control uses native Codex 0.163.0 with an owned
+temporary home and deterministic loopback model/MCP responses. It checks start and resume, explicit bearer selection,
+actual shell environment exclusion, selective denial, unrelated policy retention and verified process cleanup.
+It uses no real credentials or paid inference. Snapshot disabling is asserted in the protocol oracle; PHP does not
+claim native Linux snapshot verification. A newer native CLI requires reviewing this measured control version.
+Pass a consumer installation's autoloader to exercise its installed classes rather than the checkout's classes.
+
+Three JSON differences from JavaScript are intentional: lone UTF-16 surrogates become U+FFFD; NUL-led object keys
+are rejected; nesting is limited to 512. Binary resource prompts are not supported. The pinned reference's model
+catalog stops after twenty pages (G-99), and its initialize client metadata is hardcoded (G-100); this port preserves
+those shared limitations pending their coordinated fixes. Standalone session-store/model helper APIs and full
+TypeScript feature parity remain outside this cut.
 
 Development checks:
 

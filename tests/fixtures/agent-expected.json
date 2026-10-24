@@ -1,5 +1,5 @@
 {
- "reference": "prism-acp-ts 0.24.1",
+ "reference": "prism-acp-ts 0.25.0",
  "results": [
   {
    "name": "initialize with no driver declaration",

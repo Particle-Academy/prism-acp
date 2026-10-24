@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.0-alpha.3
+
+Additive subscription Codex support for the Windows preview; pre-release APIs may change.
+
+- Contained Codex app-server transport and driver: start/resume, paged transcript replay, typed prompts, model
+  selection, tool and reasoning updates, usage, five approval families and cancellation that preserves the session.
+- Per-child MCP bearer bindings, shell environment exclusions and snapshot disabling; constructor-only selective
+  denial of inherited MCP servers for both drivers, preserving Claude's permission hooks in one private settings file.
+- Explicit `--provider=codex` and `--codex-binary`; Claude remains the default with wildcard tool approval.
+- Golden protocol comparisons against published TypeScript 0.25.0, native fixture controls and process tests.
+
+Scope: Windows with signed-in subscriptions. API-key mode follows separately. Linux/macOS containment, Laravel
+auto-discovery and standalone session-store helpers remain deferred. Known reference model paging and hardcoded
+client metadata limitations (G-99/G-100) remain shared rather than silently diverging in this port.
+
 ## 0.1.0-alpha.2
 
 Non-breaking hardening for the Windows / Claude preview.

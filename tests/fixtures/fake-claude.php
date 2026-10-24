@@ -135,6 +135,12 @@ while (($line = fgets(STDIN)) !== false) {
 
         continue;
     }
+    if ($said === 'settings') {
+        $text($turn, (string) file_get_contents((string) $option('--settings')));
+        $result();
+
+        continue;
+    }
     $text($turn, "echo: {$said}");
     $result();
 }
