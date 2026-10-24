@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+Non-breaking hardening for the Windows / Claude preview.
+
+- Force stdin-relay PHP diagnostics to stderr, with duplicate error logging disabled, so a notice while reading
+  cannot enter the client's ACP input. A real-supervisor regression forces a read notice and checks byte-exact input.
+
 ## 0.1.0-alpha.1
 
 Initial pre-release. No previous published API exists; pre-release APIs may change.
