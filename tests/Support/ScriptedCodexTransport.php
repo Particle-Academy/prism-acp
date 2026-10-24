@@ -82,6 +82,7 @@ final class ScriptedCodexTransport implements CodexTransport
         return match ($method) {
             'thread/start','thread/resume' => (object) ['thread' => (object) ['id' => 'thread-fixture'], 'model' => 'fixture-model'],
             'turn/start' => (object) ['turn' => (object) ['id' => 'turn-fixture']],
+            'account/login/start' => (object) ['type' => 'apiKey'],
             'thread/turns/list','thread/items/list' => (object) ['data' => [], 'nextCursor' => null],
             'model/list' => (object) ['data' => [(object) ['id' => 'fixture-model', 'model' => 'fixture-model', 'displayName' => 'Fixture', 'isDefault' => true]], 'nextCursor' => null],
             'account/rateLimits/read' => (object) ['ordinaryUsageAllowed' => true, 'rateLimits' => (object) [

@@ -7,7 +7,7 @@ $record = static function (mixed $entry) use ($log): void {
         file_put_contents($log, json_encode($entry, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n", FILE_APPEND);
     }
 };
-$record(['argv' => array_slice($_SERVER['argv'], 1), 'env' => array_keys(getenv()), 'pid' => getmypid()]);
+$record(['argv' => array_slice($_SERVER['argv'], 1), 'env' => array_keys(getenv()), 'pid' => getmypid(), 'codexHome' => getenv('CODEX_HOME'), 'openaiKeyPresent' => getenv('OPENAI_API_KEY') !== false]);
 $emit = static function (array $frame): void {
     fwrite(STDOUT, json_encode($frame, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."\n");
     fflush(STDOUT);
@@ -33,7 +33,12 @@ $finish = static function (string $text, string $status = 'completed') use ($emi
 };
 while (($line = fgets(STDIN)) !== false) {
     $frame = json_decode($line, true);
-    $record(['stdin' => $frame]);
+    $recorded = $frame;
+    if (($frame['method'] ?? null) === 'account/login/start') {
+        $recorded['params']['apiKey'] = '[redacted]';
+        $record(['keyMatchesDummy' => ($frame['params']['apiKey'] ?? null) === 'dummy-explicit-key']);
+    }
+    $record(['stdin' => $recorded]);
     if (! is_array($frame)) {
         continue;
     }
@@ -49,6 +54,18 @@ while (($line = fgets(STDIN)) !== false) {
     }
     $result = new stdClass;
     switch ($method) {
+        case 'account/login/start':
+            if (in_array('--fixture-login=error', $_SERVER['argv'], true)) {
+                $emit(['jsonrpc' => '2.0', 'id' => $frame['id'], 'error' => ['code' => -1, 'message' => 'echoed dummy-explicit-key']]);
+
+                continue 2;
+            }
+            $result = in_array('--fixture-login=missing', $_SERVER['argv'], true) ? new stdClass
+                : ['type' => in_array('--fixture-login=wrong', $_SERVER['argv'], true) ? 'chatgpt' : 'apiKey'];
+            if (is_array($result) && ($result['type'] ?? null) === 'apiKey' && is_dir((string) getenv('CODEX_HOME'))) {
+                file_put_contents(getenv('CODEX_HOME').DIRECTORY_SEPARATOR.'fixture-auth.json', '{"authMode":"apiKey"}');
+            }
+            break;
         case 'thread/start':
         case 'thread/resume':
             $thread = $frame['params']['threadId'] ?? $thread;

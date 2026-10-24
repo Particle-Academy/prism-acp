@@ -12,6 +12,7 @@ use Prism\Acp\Agent\ReportsModels;
 use Prism\Acp\Agent\TurnOutcome;
 use Prism\Acp\Async\Deferred;
 use Prism\Acp\Async\Loop;
+use Prism\Acp\Credentials\ApiKeyHome;
 use Prism\Acp\Env\ChildEnv;
 use Prism\Acp\JsonRpc\JsonRpcPeer;
 use Prism\Acp\Mcp\McpServers;
@@ -25,7 +26,7 @@ use Prism\Acp\SessionId;
 use Prism\Acp\Support\Js;
 use Prism\Acp\Support\PrivateDirectory;
 
-/** Stateful App Server driver, ported from the published TS0.25.0 driver and checked by its protocol oracle. */
+/** Stateful App Server driver, ported from the published TS0.25.1 driver and checked by its protocol oracle. */
 final class CodexDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, ReportsModels
 {
     use CodexItems;
@@ -213,8 +214,10 @@ final class CodexDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, R
 
     private function connect(): void
     {
-        $built = ChildEnv::build($this->options->parentEnv ?? getenv(),
-            ['CODEX_HOME', 'CODEX_CONFIG_DIR', 'XDG_CONFIG_HOME', ...$this->options->allowEnv], $this->mcpEnv);
+        $parentEnv = $this->options->parentEnv ?? getenv();
+        $keyed = ApiKeyHome::check('codex', $this->options->credentials, $parentEnv);
+        $built = ChildEnv::build($parentEnv,
+            ['CODEX_HOME', 'CODEX_CONFIG_DIR', 'XDG_CONFIG_HOME', ...$this->options->allowEnv], [...($keyed?->environment('codex') ?? []), ...$this->mcpEnv]);
         $this->withheld = $built->withheld;
         $handlers = new CodexTransportHandlers(onFrame: fn (mixed $frame) => $this->receive($frame),
             onStderr: function (string $line): void {
@@ -233,6 +236,9 @@ final class CodexDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, R
         // Intentionally mirrors the pinned reference; G-100 owns package-derived identity in all entry points.
         $peer->request('initialize', ['clientInfo' => ['name' => '@particle-academy/prism-acp', 'version' => '0.4.1'], 'capabilities' => new \stdClass])->await();
         $peer->notify('initialized');
+        if ($keyed !== null) {
+            $this->loginWithApiKey($peer, $keyed->key());
+        }
         $mcpConfig = $this->mcpConfig;
         $bindings = array_keys($this->mcpEnv);
         if ($this->disabledMcpServers !== [] || $bindings !== []) {
@@ -296,6 +302,19 @@ final class CodexDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, R
         $this->queuedPrompt = null;
         if ($queued !== null) {
             $this->startTurn($queued);
+        }
+    }
+
+    private function loginWithApiKey(JsonRpcPeer $peer, #[\SensitiveParameter] string $apiKey): void
+    {
+        try {
+            $result = $peer->request('account/login/start', ['type' => 'apiKey', 'apiKey' => $apiKey])->await();
+        } catch (\Throwable) {
+            // A provider error may echo the key; never retain it as a previous exception or surface its message.
+            throw new \RuntimeException('Codex refused the API key login');
+        }
+        if (Js::string($result, 'type') !== 'apiKey') {
+            throw new \RuntimeException('Codex did not confirm the API key login');
         }
     }
 

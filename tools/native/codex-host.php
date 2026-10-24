@@ -11,6 +11,7 @@ use Prism\Acp\Async\Deferred;
 use Prism\Acp\Async\Loop;
 use Prism\Acp\Codex\CodexDriver;
 use Prism\Acp\Codex\CodexDriverOptions;
+use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Mcp\McpServers;
 use Prism\Acp\Ndjson\Json;
 
@@ -20,11 +21,12 @@ $done = new Deferred($loop);
 $problems = [];
 $driver = new CodexDriver(new CodexDriverOptions(
     cwd: $options->cwd, binary: $options->binary, model: 'fixture', sandbox: 'danger-full-access', approvalPolicy: 'never',
-    parentEnv: [...getenv(), 'CODEX_HOME' => $options->home, 'OLD_SELECTOR' => 'dummy-old-selector',
+    parentEnv: [...getenv(), 'CODEX_HOME' => ($options->apiKeyMode ?? false) ? dirname($options->home).DIRECTORY_SEPARATOR.'subscription' : $options->home, 'OLD_SELECTOR' => 'dummy-old-selector',
         'PRISM_FIXTURE_HIDDEN' => 'must-be-excluded', 'PRISM_FIXTURE_VISIBLE' => 'visible'],
     allowEnv: ['OLD_SELECTOR', 'PRISM_FIXTURE_HIDDEN', 'PRISM_FIXTURE_VISIBLE'],
     mcpServers: McpServers::read($options->mcpServers), disabledMcpServers: ['blocked'],
     resumeSessionId: $options->resumeSessionId ?? null,
+    credentials: ($options->apiKeyMode ?? false) ? new ProviderCredentials('apiKey', 'sk-prism-invalid-loopback-key', $options->home) : null,
 ), new DriverEvents(onProtocolError: function (string $problem) use (&$problems): void {
     $problems[] = $problem;
 }, onTurnEnd: fn (TurnOutcome $outcome) => $done->resolve($outcome),

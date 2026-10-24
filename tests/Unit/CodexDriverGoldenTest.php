@@ -11,6 +11,7 @@ use Prism\Acp\Codex\CodexDriver;
 use Prism\Acp\Codex\CodexDriverOptions;
 use Prism\Acp\Codex\CodexTransportHandlers;
 use Prism\Acp\Codex\CodexTransportOptions;
+use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Mcp\McpServers;
 use Prism\Acp\Ndjson\Json;
 use Prism\Acp\Support\Js;
@@ -24,6 +25,14 @@ function runCodexScenario(stdClass $scenario): array
     $transport = null;
     $childEnv = null;
     $options = (array) ($scenario->options ?? new stdClass);
+    $credentialRoot = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-codex-key-golden-'.bin2hex(random_bytes(5));
+    $privateHome = $credentialRoot.DIRECTORY_SEPARATOR.'app';
+    $subscriptionHome = $credentialRoot.DIRECTORY_SEPARATOR.'subscription';
+    if (isset($options['credentials'])) {
+        $credentials = $options['credentials'];
+        $options['credentials'] = new ProviderCredentials($credentials->mode, $credentials->apiKey ?? null,
+            isset($credentials->home) ? str_replace('@key-home', $privateHome, $credentials->home) : null);
+    }
     if (isset($options['mcpServers'])) {
         $options['mcpServers'] = McpServers::read($options['mcpServers']);
     }
@@ -31,6 +40,9 @@ function runCodexScenario(stdClass $scenario): array
         if (isset($options[$dictionary])) {
             $options[$dictionary] = (array) $options[$dictionary];
         }
+    }
+    if (isset($options['parentEnv'])) {
+        $options['parentEnv'] = array_map(fn (string $value): string => str_replace('@subscription-home', $subscriptionHome, $value), $options['parentEnv']);
     }
     $driver = new CodexDriver(new CodexDriverOptions(...['cwd' => '/fixture', 'parentEnv' => [], ...$options]), new DriverEvents(
         onUpdate: function (array $value) use (&$events): void {
@@ -116,19 +128,30 @@ function runCodexScenario(stdClass $scenario): array
     } finally {
         $driver->kill();
         $loop->drain();
+        if (is_dir($privateHome)) {
+            rmdir($privateHome);
+        }
+        if (is_dir($credentialRoot)) {
+            rmdir($credentialRoot);
+        }
     }
 
     $result = ['sent' => $transport->sent ?? [], 'events' => $events, 'closes' => $transport->closes ?? 0];
+    if ($scenario->auditCredentials ?? false) {
+        $result['childEnv'] = $childEnv === null ? null : (object) $childEnv;
+        $result['withheld'] = $driver->withheldCredentials();
+    }
     if ($scenario->auditMcp ?? false) {
         $names = array_values(array_filter(array_keys($childEnv), static fn (string $name): bool => str_starts_with($name, 'PRISM_ACP_MCP_TOKEN_')));
         expect($names)->toHaveCount(1)->and($names[0])->toMatch('/\APRISM_ACP_MCP_TOKEN_[A-F0-9]{32}\z/')
             ->and($childEnv[$names[0]])->toBe('fixture-explicit-token');
         $result['childEnv'] = (object) $childEnv;
 
-        return (array) Json::decode(str_replace($names[0], 'PRISM_ACP_MCP_TOKEN_FIXTURE_0', Json::encode($result)));
+        $result = (array) Json::decode(str_replace($names[0], 'PRISM_ACP_MCP_TOKEN_FIXTURE_0', Json::encode($result)));
     }
 
-    return $result;
+    return (array) Json::decode(str_replace([substr(Json::encode($privateHome), 1, -1), substr(Json::encode($subscriptionHome), 1, -1)],
+        ['@key-home', '@subscription-home'], Json::encode($result)));
 }
 
 $codexFixtures = Json::decode((string) file_get_contents(dirname(__DIR__).'/fixtures/codex-driver.json'));

@@ -9,7 +9,8 @@ use Prism\Acp\Env\ChildEnv;
 /**
  * A temporary directory only this process's user can read, made BEFORE a credential is written into it. On Windows a
  * file mode means nothing, so inherited grants are removed and the current identity alone is granted access, as the
- * reference does with whoami and icacls. Any failure removes the directory and says so without naming a path.
+ * intended policy requires. Existing explicit grants are cleared too. Any failure removes the directory and says so
+ * without naming a path.
  */
 final class PrivateDirectory
 {
@@ -20,15 +21,23 @@ final class PrivateDirectory
             throw new \RuntimeException('failed to create a private temporary directory');
         }
         try {
-            if (PHP_OS_FAMILY === 'Windows') {
-                self::restrictOnWindows($directory);
-            }
+            self::protect($directory);
         } catch (\Throwable) {
             @rmdir($directory);
             throw new \RuntimeException('failed to protect a private temporary directory');
         }
 
         return $directory;
+    }
+
+    /** Restrict a newly-created host-chosen directory BEFORE the native CLI can write credentials into it. */
+    public static function protect(string $directory): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::restrictOnWindows($directory);
+        } elseif (! @chmod($directory, 0700)) {
+            throw new \RuntimeException('failed to protect a private directory');
+        }
     }
 
     /** Remove the files named and then the directory. Returns false when something could not be removed. */
@@ -55,6 +64,8 @@ final class PrivateDirectory
         if (preg_match('/\bS-\d+(?:-\d+)+\b/', $identity, $sid) !== 1) {
             throw new \RuntimeException('cannot identify the Windows process identity');
         }
+        // /inheritance:r alone preserves explicit non-owner grants. This directory is still new and empty.
+        self::run([$system32.'\\icacls.exe', $directory, '/reset'], $env);
         self::run([$system32.'\\icacls.exe', $directory, '/inheritance:r', '/grant:r', "*{$sid[0]}:(OI)(CI)F"], $env);
     }
 

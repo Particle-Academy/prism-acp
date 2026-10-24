@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +16,8 @@ assert.match(nativeVersion, /\b0\.163\.0\b/, 'review the native control before c
 const root = await mkdtemp(join(tmpdir(), 'prism-acp-native-codex-'));
 const home = join(root, 'home'); const project = join(root, 'project');
 await mkdir(home); await mkdir(join(project, '.git'), {recursive:true});
+const apiKeyMode=process.env.PRISM_NATIVE_CREDENTIALS==='apiKey';
+if(apiKeyMode){await mkdir(join(root,'subscription'));await writeFile(join(root,'subscription','auth.json'),'owned subscription sentinel');}
 const bearer = 'dummy-php-session-bearer';
 let modelCalls = 0; let shellOutput = ''; const calls = []; const fixtureErrors = [];
 function toolsOf(tools, prefix='') {
@@ -65,7 +67,7 @@ const shellPolicy=keyedPolicy?'filters={PRISM_FIXTURE_HIDDEN="exclude"}':'exclud
 await writeFile(join(home,'config.toml'),`model="fixture"\nmodel_provider="fixture"\n[model_providers.fixture]\nname="Fixture"\nbase_url="${origin}/model"\nwire_api="responses"\nrequires_openai_auth=false\nsupports_websockets=false\n[projects.${JSON.stringify(project)}]\ntrust_level="trusted"\n[features]\nunified_exec=false\nshell_snapshot=true\nview_image=false\n[shell_environment_policy]\ninherit="all"\nignore_default_excludes=true\n${shellPolicy}\nset={PRISM_FIXTURE_SET="visible"}\n[mcp_servers.fixture]\nurl="${origin}/mcp"\nbearer_token_env_var="OLD_SELECTOR"\n[mcp_servers.blocked]\nurl="${origin}/blocked"\n[mcp_servers.unrelated]\nurl="${origin}/unrelated"\n`);
 async function run(resumeSessionId, withBearer=true){
   calls.length=0;modelCalls=0;shellOutput='';
-  const options={cwd:project,binary,home,resumeSessionId,mcpServers:[{type:'http',name:'fixture',url:`${origin}/mcp`,
+  const options={cwd:project,binary,home,resumeSessionId,apiKeyMode,mcpServers:[{type:'http',name:'fixture',url:`${origin}/mcp`,
     headers:withBearer?[{name:'Authorization',value:`Bearer ${bearer}`}]:[]}]};
   const optionsPath=join(root,'options.json');await writeFile(optionsPath,JSON.stringify(options));
   const child=spawn(php,[fileURLToPath(new URL('./codex-host.php',import.meta.url)),optionsPath,...(installedAutoload?[installedAutoload]:[])],{windowsHide:true,stdio:['ignore','pipe','pipe']});
@@ -86,7 +88,8 @@ async function run(resumeSessionId, withBearer=true){
   assert(calls.some((call)=>call.path==='/mcp'&&call.method==='tools/list'&&call.auth===`Bearer ${withBearer?bearer:'dummy-old-selector'}`),'MCP uses the intended selector');
   assert(!calls.some((call)=>call.path==='/blocked'),'selective denial is effective');
   assert(calls.some((call)=>call.path==='/unrelated'&&call.method==='tools/list'),'unrelated inherited server survives');
-  console.log(JSON.stringify({passed:true,nativeVersion,keyedPolicy,resumed:resumeSessionId!==undefined,withBearer,modelCalls,stop}));
+  if(apiKeyMode)assert.equal(await readFile(join(root,'subscription','auth.json'),'utf8'),'owned subscription sentinel','API-key turns preserve the subscription home');
+  console.log(JSON.stringify({passed:true,nativeVersion,keyedPolicy,apiKeyMode,resumed:resumeSessionId!==undefined,withBearer,modelCalls,stop}));
   return result.sessionId;
 }
 try{

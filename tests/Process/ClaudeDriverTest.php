@@ -9,6 +9,7 @@ use Prism\Acp\Async\Deferred;
 use Prism\Acp\Async\Loop;
 use Prism\Acp\Claude\ClaudeDriver;
 use Prism\Acp\Claude\ClaudeDriverOptions;
+use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Meta;
 use Prism\Acp\Ndjson\Json;
 
@@ -29,6 +30,9 @@ final class ClaudeHarness
 
     /** @var list<string> */
     public array $problems = [];
+
+    /** @var list<string> */
+    public array $stderr = [];
 
     public ?int $exitCode = null;
 
@@ -79,6 +83,9 @@ final class ClaudeHarness
                 $this->exited = true;
                 $this->exitCode = $code;
             },
+            onStderr: function (string $line): void {
+                $this->stderr[] = $line;
+            },
         ), $loop);
     }
 
@@ -127,6 +134,72 @@ final class ClaudeHarness
 }
 
 describe('ClaudeDriver against a process', function () {
+    it('withholds a dangling key prefix when stderr ends and flushes it before exit', function (): void {
+        $root = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-claude-cutoff-key-'.bin2hex(random_bytes(5));
+        mkdir($root);
+        $home = $root.DIRECTORY_SEPARATOR.'app';
+        $h = new ClaudeHarness(new Loop, ['credentials' => new ProviderCredentials('apiKey', 'dummy-explicit-key', $home)]);
+        try {
+            $h->driver->start();
+            $h->turn('stderr-cutoff');
+            $h->finish();
+            expect($h->driver->stderr())->toBe('fixture cutoff [redacted]')
+                ->and(implode('', $h->stderr))->not->toContain('dummy-ex');
+        } finally {
+            $h->finish();
+            if (is_file($home.DIRECTORY_SEPARATOR.'fixture-auth.json')) {
+                unlink($home.DIRECTORY_SEPARATOR.'fixture-auth.json');
+            } if (is_dir($home)) {
+                rmdir($home);
+            } rmdir($root);
+        }
+    });
+
+    it('redacts an API key echoed across stderr chunks while retaining diagnostic context', function (): void {
+        $root = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-claude-stderr-key-'.bin2hex(random_bytes(5));
+        mkdir($root);
+        $home = $root.DIRECTORY_SEPARATOR.'app';
+        $h = new ClaudeHarness(new Loop, ['credentials' => new ProviderCredentials('apiKey', 'dummy-explicit-key', $home)]);
+        try {
+            $h->driver->start();
+            $h->turn('stderr-key');
+            $h->finish();
+            expect(implode('', $h->stderr).$h->driver->stderr())->not->toContain('dummy-explicit-key')
+                ->and($h->driver->stderr())->toContain('fixture diagnostic', '雪', 'complete');
+        } finally {
+            $h->finish();
+            if (is_file($home.DIRECTORY_SEPARATOR.'fixture-auth.json')) {
+                unlink($home.DIRECTORY_SEPARATOR.'fixture-auth.json');
+            } if (is_dir($home)) {
+                rmdir($home);
+            } rmdir($root);
+        }
+    });
+
+    it('uses only an explicit dummy API key and its separate app home without exposing the key', function (): void {
+        $root = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-claude-key-'.bin2hex(random_bytes(5));
+        mkdir($root);
+        $home = $root.DIRECTORY_SEPARATOR.'app';
+        $h = new ClaudeHarness(new Loop, ['credentials' => new ProviderCredentials('apiKey', 'dummy-explicit-key', $home)]);
+        try {
+            $h->driver->start();
+            $h->turn('keyed turn');
+            expect($h->cli()[0]['claudeHome'])->toBe($home)->and($h->cli()[0]['keyMatchesDummy'])->toBeTrue()
+                ->and($h->cli()[0]['env'])->not->toContain('OPENAI_API_KEY')
+                ->and($h->driver->withheldCredentials())->toContain('ANTHROPIC_API_KEY')
+                ->and(file_get_contents($h->log))->not->toContain('dummy-explicit-key')
+                ->and($h->said())->not->toContain('dummy-explicit-key')
+                ->and(is_file($home.DIRECTORY_SEPARATOR.'fixture-auth.json'))->toBeTrue();
+        } finally {
+            $h->finish();
+            if (is_file($home.DIRECTORY_SEPARATOR.'fixture-auth.json')) {
+                unlink($home.DIRECTORY_SEPARATOR.'fixture-auth.json');
+            } if (is_dir($home)) {
+                rmdir($home);
+            } rmdir($root);
+        }
+    });
+
     it('combines selective inherited MCP denial and wildcard approval in one private settings file', function () {
         $h = new ClaudeHarness(new Loop, ['disabledMcpServers' => ['blocked'], 'permissionPrompts' => ['*']],
             static fn (): PermissionOutcome => PermissionOutcome::selected('allow_once'));

@@ -13,6 +13,8 @@ use Prism\Acp\Agent\ReportsModels;
 use Prism\Acp\Agent\TurnOutcome;
 use Prism\Acp\Async\Deferred;
 use Prism\Acp\Async\Loop;
+use Prism\Acp\Credentials\ApiKeyHome;
+use Prism\Acp\Credentials\SecretRedactor;
 use Prism\Acp\Env\ChildEnv;
 use Prism\Acp\Mcp\McpServers;
 use Prism\Acp\Meta;
@@ -89,6 +91,8 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
     private bool $started = false;
 
     private string $stderr = '';
+
+    private ?SecretRedactor $stderrRedactor = null;
 
     private ?TurnOutcome $pendingOutcome = null;
 
@@ -282,7 +286,10 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         }
 
         // The CLI finds the user's own login through these, so they are allowed explicitly rather than inherited.
-        $built = ChildEnv::build($this->options->parentEnv ?? getenv(), ['CLAUDE_CONFIG_DIR', 'XDG_CONFIG_HOME', ...$this->options->allowEnv]);
+        $parentEnv = $this->options->parentEnv ?? getenv();
+        $keyed = ApiKeyHome::check('claude', $this->options->credentials, $parentEnv);
+        $this->stderrRedactor = $keyed === null ? null : new SecretRedactor($keyed->key());
+        $built = ChildEnv::build($parentEnv, ['CLAUDE_CONFIG_DIR', 'XDG_CONFIG_HOME', ...$this->options->allowEnv], $keyed?->environment('claude') ?? []);
         $env = $built->env;
         $this->withheld = $built->withheld;
 
@@ -530,6 +537,11 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         $this->removeApprovals();
         // Flush first: the LAST frame of a turn is the `result` that carries the outcome, newline or not.
         $this->emit($this->framer->end());
+        $redactor = $this->stderrRedactor;
+        if ($redactor !== null) {
+            $this->acceptStderr($redactor->push($this->stderrText->end()));
+            $this->acceptStderr($redactor->end());
+        }
         $this->events->onExit?->__invoke($this->provider?->provider->exitCode(), null);
     }
 
@@ -608,6 +620,11 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
     private function onStderr(string $chunk): void
     {
         $text = $this->stderrText->push($chunk);
+        $this->acceptStderr($this->stderrRedactor?->push($text) ?? $text);
+    }
+
+    private function acceptStderr(string $text): void
+    {
         $this->stderr .= $text;
         // Line-wise within a chunk, as the reference splits each chunk it receives.
         foreach (preg_split('/\r?\n/', $text) ?: [] as $line) {

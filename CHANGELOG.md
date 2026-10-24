@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.0-alpha.4
+
+Additive host-configured API-key mode for both Windows drivers; subscription authentication remains the default.
+
+- `ProviderCredentials` selects app/tenant API keys and a separate absolute native configuration home. Default,
+  moved and canonical aliases of subscription homes are refused; newly created homes have private permissions.
+- Claude receives only the explicit Anthropic key and app home. Codex confirms `account/login/start` before starting
+  or resuming a thread; refused or unconfirmed login never falls back. Keys stay out of argv and reported errors.
+- Explicit environment settings replace alternate-case inherited names, so a Windows child cannot choose the old home.
+- New Windows homes and temporary directories clear prior explicit ACL grants as well as inherited grants before
+  receiving credentials or approval material; a protected DACL alone does not establish exclusive access (G-118).
+- Redact the explicit Claude key from stderr callbacks/storage even across chunk boundaries, including a dangling
+  prefix at stream end; preserve other diagnostic text. Match the published TS0.25.1 fix for G-116.
+- Credentials remain trusted embedder configuration and survive `forSession()` unchanged; ACP cannot supply them.
+  Native no-inference authentication controls and published-reference credential/driver goldens cover both modes.
+
+No CLI key arguments, POSIX containment or full G-98 parity is added. The app owns existing homes and their access
+policy. Codex persists API keys in its native home; separate homes do not share subscription settings or sessions.
+
 ## 0.1.0-alpha.3
 
 Additive subscription Codex support for the Windows preview; pre-release APIs may change.
