@@ -1,9 +1,9 @@
 {
     "name": "particle-academy/prism-acp",
-    "description": "Agent Client Protocol for the signed-in Claude CLI from PHP. Initial Windows preview, with no third-party runtime dependencies.",
+    "description": "Agent Client Protocol for signed-in Claude and Codex CLIs from PHP. Windows preview, with no third-party runtime dependencies.",
     "type": "library",
     "license": "MIT",
-    "keywords": ["acp", "agent-client-protocol", "claude", "prism"],
+    "keywords": ["acp", "agent-client-protocol", "claude", "codex", "prism"],
     "homepage": "https://github.com/Particle-Academy/prism-acp",
     "support": {
         "issues": "https://github.com/Particle-Academy/prism-acp/issues",

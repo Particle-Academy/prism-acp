@@ -103,7 +103,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Particle-Academy/prism-acp-ts
-          ref: 0a4a8a2a12877627b798f76c41df7f45294307ac
+          ref: e24c27e78b92c735a8b357265cf9df6d2bf877c7
           path: .reference-source
           persist-credentials: false
       - name: Fetch org dependency policy
@@ -115,12 +115,13 @@ jobs:
       - name: Check org dependency policy before install
         run: node .third-party-allowlist/third-party/check.mjs --repo .
       - name: Install published reference without lifecycle scripts
-        run: npm install --prefix .reference-runtime --ignore-scripts --no-audit --no-fund --no-package-lock @particle-academy/prism-acp@0.24.1
+        run: npm install --prefix .reference-runtime --ignore-scripts --no-audit --no-fund --no-package-lock @particle-academy/prism-acp@0.25.0
       - name: Regenerate expectations using the actual published code
         run: |
           node tools/golden/claude-to-acp.mjs .reference-runtime/node_modules/@particle-academy/prism-acp .reference-source/test/fixtures
           node tools/golden/units.mjs .reference-runtime/node_modules/@particle-academy/prism-acp
           node tools/golden/agent.mjs .reference-runtime/node_modules/@particle-academy/prism-acp
+          node tools/golden/codex-driver.mjs .reference-runtime/node_modules/@particle-academy/prism-acp
           git diff --exit-code -- tests/fixtures
           test -z "$(git ls-files --others --exclude-standard -- tests/fixtures)"
       - name: Report newer reference releases

@@ -141,4 +141,42 @@ describe('the agent over stdio', function () {
             expect($client->close())->toBe(0);
         }
     })->skip(! array_filter(explode(PATH_SEPARATOR, (string) getenv('PATH')), fn (string $path) => is_file(rtrim($path, '\\/').'/node.exe')), 'node for the fake npm CLI');
+    it('runs the shipped Codex CLI choice with replay, native approvals and provider-exit errors', function () {
+        $cwd = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-codex-cli-'.bin2hex(random_bytes(4));
+        mkdir($cwd);
+        $fixture = dirname(__DIR__).'/fixtures/fake-codex.php';
+        file_put_contents($cwd.'/fake.cjs', 'const {spawn} = require("node:child_process"); const child = spawn('
+            .json_encode(PHP_BINARY).', ['.json_encode($fixture).', ...process.argv.slice(2)], {stdio:"inherit"}); child.on("error", () => process.exit(1)); child.on("exit", code => process.exit(code ?? 1));');
+        file_put_contents($cwd.'/codex.cmd', '@ECHO off'."\n".'"%_prog%" "%dp0%\\fake.cjs" %*'."\n");
+        $decisions = 0;
+        $client = new AcpClientProcess($cwd,
+            [PHP_BINARY, dirname(__DIR__, 2).'/bin/prism-acp', '--provider=codex', '--cwd='.$cwd, '--codex-binary='.$cwd.'/codex.cmd'],
+            function () use (&$decisions): array {
+                return ['outcome' => ['outcome' => 'selected', 'optionId' => ++$decisions === 1 ? 'codex-decline' : 'codex-accept']];
+            });
+        try {
+            $init = $client->request('initialize', ['protocolVersion' => 1, 'clientCapabilities' => new stdClass]);
+            expect($init->result->_meta->{'particle.academy/driver_capabilities'}->transcriptReplay)->toBeTrue();
+            $session = $client->request('session/load', ['sessionId' => 'thread-existing', 'cwd' => $cwd, 'mcpServers' => [],
+                'approvalPolicy' => 'never', 'disabledMcpServers' => []]);
+            expect($session->result->models->currentModelId)->toBe('fixture-model')
+                ->and(array_column($session->result->models->availableModels, 'modelId'))->toBe(['fixture-model', 'second']);
+            foreach (['decline', 'accept'] as $native) {
+                $before = count($client->notifications);
+                $response = $client->request('session/prompt', ['sessionId' => 'thread-existing', 'prompt' => [['type' => 'text', 'text' => 'approval']]]);
+                $said = '';
+                foreach (array_slice($client->notifications, $before) as $note) {
+                    if (($note->method ?? null) === 'session/update' && ($note->params->update->sessionUpdate ?? null) === 'agent_message_chunk') {
+                        $said .= $note->params->update->content->text;
+                    }
+                }
+                expect($response->result->stopReason)->toBe('end_turn')->and($said)->toBe('decision: '.$native);
+            }
+            expect($decisions)->toBe(2);
+            $exit = $client->request('session/prompt', ['sessionId' => 'thread-existing', 'prompt' => [['type' => 'text', 'text' => 'exit']]]);
+            expect($exit)->toHaveProperty('error');
+        } finally {
+            expect($client->close())->toBe(0);
+        }
+    })->skip(! array_filter(explode(PATH_SEPARATOR, (string) getenv('PATH')), fn (string $path) => is_file(rtrim($path, '\\/').'/node.exe')), 'node for the fake npm CLI');
 })->skip(PHP_OS_FAMILY !== 'Windows', 'containment exists on Windows only so far');

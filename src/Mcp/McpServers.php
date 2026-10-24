@@ -27,6 +27,32 @@ final class McpServers
     /** Codex's documented per-server tool approval modes (`mcp_servers.<id>.default_tools_approval_mode`). */
     public const TOOL_APPROVALS = ['auto', 'prompt', 'writes', 'approve'];
 
+    /** JavaScript's \s, including BOM; PCRE's default whitespace class differs. */
+    private const JS_WHITESPACE = '[\x09-\x0D\x20\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]';
+
+    /** @param list<Server> $servers
+     * @return list<string>
+     */
+    public static function readDisabled(mixed $value, array $servers): array
+    {
+        if ($value === Undefined::Value) {
+            return [];
+        }
+        if (! is_array($value) || ! array_is_list($value)) {
+            throw new \InvalidArgumentException('disabledMcpServers must be an array of distinct non-empty names');
+        }
+        $active = array_column($servers, 'name');
+        $seen = [];
+        foreach ($value as $name) {
+            if (! is_string($name) || Js::trim($name) !== $name || $name === '' || preg_match('/[\x00-\x1f\x7f]/', $name) === 1 || isset($seen[$name]) || in_array($name, $active, true)) {
+                throw new \InvalidArgumentException('disabledMcpServers must contain distinct valid names, separate from explicit mcpServers');
+            }
+            $seen[$name] = true;
+        }
+
+        return $value;
+    }
+
     /**
      * Validate the entire list. Absent (Undefined) is no servers, for callers that omitted the field; an explicit
      * null is not a list and is refused, as it is there.
@@ -148,6 +174,169 @@ final class McpServers
         }
 
         return (object) ['mcp_servers' => Json::ordered($entries)];
+    }
+
+    /** Bind explicit HTTP bearers to this child's environment, never rollout config or argv.
+     * @param  list<Server>  $servers
+     * @param  array<string,string>  $approval
+     * @return array{config:?\stdClass,env:array<string,string>}
+     */
+    public static function codexSessionConfig(array $servers, array $approval = []): array
+    {
+        // Validate approval even when there are no explicit servers.
+        $config = self::codexConfig($servers, $approval);
+        if ($servers === []) {
+            return ['config' => null, 'env' => []];
+        }
+        $env = [];
+        foreach ($servers as $server) {
+            if (isset($server['command'])) {
+                continue;
+            }
+            foreach ($server['headers'] as $header) {
+                if (strtolower($header['name']) !== 'authorization') {
+                    continue;
+                }
+                $authorization = trim($header['value'], " \t");
+                if (preg_match('/\ABearer(?:'.self::JS_WHITESPACE.'|\z)/iu', $authorization) !== 1) {
+                    continue;
+                }
+                if (preg_match('/\ABearer[ \t]+(.+)\z/iu', $authorization, $matches) !== 1 || preg_match('/'.self::JS_WHITESPACE.'/u', $matches[1]) === 1) {
+                    self::invalid('Bearer Authorization must contain a non-empty token without whitespace');
+                }
+                $name = 'PRISM_ACP_MCP_TOKEN_'.strtoupper(bin2hex(random_bytes(16)));
+                $env[$name] = $matches[1];
+                $entry = $config->mcp_servers->{$server['name']};
+                if (! $entry instanceof \stdClass || ! $entry->http_headers instanceof \stdClass) {
+                    throw new \LogicException('validated HTTP MCP configuration lost its headers');
+                }
+                $entry->bearer_token_env_var = $name;
+                foreach (array_keys(get_object_vars($entry->http_headers)) as $field) {
+                    if (strtolower((string) $field) === 'authorization') {
+                        unset($entry->http_headers->{$field});
+                    }
+                }
+            }
+        }
+        if ($env !== []) {
+            $config->features = (object) ['shell_snapshot' => false];
+        }
+
+        return ['config' => $config, 'env' => $env];
+    }
+
+    /** Preserve effective native shell policy, adding exclusions for precisely these bearer names.
+     * @param  list<string>  $bindings
+     */
+    public static function codexShellPolicy(\stdClass $config, array $bindings, mixed $effective): \stdClass
+    {
+        $invalid = static function (): never {
+            throw new \RuntimeException('Codex returned a shell environment policy that cannot safely exclude MCP bearer bindings');
+        };
+        $policy = $effective === null || $effective === Undefined::Value ? new \stdClass : $effective;
+        if (! $policy instanceof \stdClass) {
+            $invalid();
+        }
+        $excluded = $policy->exclude ?? [];
+        if (! self::stringList($excluded)) {
+            $invalid();
+        }
+        $set = $policy->set ?? new \stdClass;
+        if (! $set instanceof \stdClass) {
+            $invalid();
+        }
+        $names = array_map(strtoupper(...), $bindings);
+        foreach (array_keys(get_object_vars($set)) as $name) {
+            if (in_array(strtoupper((string) $name), $names, true)) {
+                $invalid();
+            }
+        }
+        $preserved = new \stdClass;
+        foreach (get_object_vars($policy) as $field => $value) {
+            if ($value !== null) {
+                $preserved->{(string) $field} = $value;
+            }
+        }
+        if (isset($policy->filters)) {
+            $filters = $policy->filters;
+            if (! $filters instanceof \stdClass) {
+                $invalid();
+            }
+            foreach (get_object_vars($filters) as $value) {
+                if ($value !== 'include' && $value !== 'exclude') {
+                    $invalid();
+                }
+            }
+            if ($excluded !== [] || (is_array($policy->include_only ?? null) && $policy->include_only !== [])) {
+                $invalid();
+            }
+            unset($preserved->exclude, $preserved->include_only);
+            $preserved->filters = clone $filters;
+            foreach ($bindings as $name) {
+                $preserved->filters->{$name} = 'exclude';
+            }
+        } else {
+            $preserved->exclude = [...$excluded, ...$bindings];
+        }
+        $result = clone $config;
+        $result->shell_environment_policy = $preserved;
+
+        return $result;
+    }
+
+    /** A disabled native entry still needs a valid transport. Do not mix URL fields into stdio.
+     * @param  list<string>  $disabled
+     */
+    public static function codexDisabledConfig(?\stdClass $config, array $disabled, \stdClass $inherited): \stdClass
+    {
+        $entries = $config->mcp_servers ?? new \stdClass;
+        if (! $entries instanceof \stdClass) {
+            throw new \LogicException('validated MCP configuration lost its server dictionary');
+        }
+        $entries = clone $entries;
+        foreach ($disabled as $name) {
+            $present = property_exists($inherited, $name);
+            $existing = $present ? $inherited->{$name} : null;
+            if ($present && ! $existing instanceof \stdClass) {
+                throw new \RuntimeException('Codex returned invalid inherited MCP configuration');
+            }
+            if ($existing === null) {
+                $transport = (object) ['url' => 'http://127.0.0.1:1'];
+            } elseif (is_string($existing->command ?? null) && $existing->command !== '') {
+                if (property_exists($existing, 'args') && ! self::stringList($existing->args)) {
+                    throw new \RuntimeException('Codex returned invalid inherited MCP configuration');
+                }
+                $transport = (object) ['command' => $existing->command];
+                if (property_exists($existing, 'args')) {
+                    $transport->args = $existing->args;
+                }
+            } elseif (is_string($existing->url ?? null) && $existing->url !== '') {
+                $transport = (object) ['url' => $existing->url];
+            } else {
+                throw new \RuntimeException('Codex returned invalid inherited MCP transport');
+            }
+            $transport->enabled = false;
+            $entries->{$name} = $transport;
+        }
+        $result = clone ($config ?? new \stdClass);
+        $result->mcp_servers = $entries;
+
+        return $result;
+    }
+
+    /** @phpstan-assert-if-true list<string> $value */
+    private static function stringList(mixed $value): bool
+    {
+        if (! is_array($value) || ! array_is_list($value)) {
+            return false;
+        }
+        foreach ($value as $entry) {
+            if (! is_string($entry)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

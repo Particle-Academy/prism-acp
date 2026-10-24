@@ -8,6 +8,8 @@ use Prism\Acp\Agent\DriverEvents;
 use Prism\Acp\Agent\Stdio;
 use Prism\Acp\Claude\ClaudeDriver;
 use Prism\Acp\Claude\ClaudeDriverOptions;
+use Prism\Acp\Codex\CodexDriver;
+use Prism\Acp\Codex\CodexDriverOptions;
 use Prism\Acp\JsonRpc\JsonRpcPeer;
 use Prism\Acp\Meta;
 use Prism\Acp\Process\WindowsCommand;
@@ -19,17 +21,21 @@ try {
     $options = [];
     foreach (array_slice($argv, 1) as $argument) {
         if ($argument === '--help' || $argument === '-h') {
-            fwrite(STDOUT, "Prism ACP: Claude on Windows (preview)\nUsage: prism-acp [--cwd=ABSOLUTE_PATH] [--model=MODEL] [--claude-binary=ABSOLUTE_PATH]\nTools request permission through the ACP client. Codex, Linux and macOS are not supported in this release.\n");
+            fwrite(STDOUT, "Prism ACP: Claude and Codex on Windows (preview)\nUsage: prism-acp [--provider=claude|codex] [--cwd=ABSOLUTE_PATH] [--model=MODEL] [--claude-binary=ABSOLUTE_PATH] [--codex-binary=ABSOLUTE_PATH]\nClaude is the default; every Claude tool requests permission through the ACP client. Codex uses on-request approvals and its own sandbox default. Linux and macOS are not supported.\n");
             exit(0);
         }
         if ($argument === '--version') {
             fwrite(STDOUT, Version::VERSION."\n");
             exit(0);
         }
-        if (preg_match('/\A--(cwd|model|claude-binary)=(.+)\z/s', $argument, $match) !== 1 || isset($options[$match[1]])) {
+        if (preg_match('/\A--(provider|cwd|model|claude-binary|codex-binary)=(.+)\z/s', $argument, $match) !== 1 || isset($options[$match[1]])) {
             throw new InvalidArgumentException('unknown, empty or repeated option; use --help');
         }
         $options[$match[1]] = $match[2];
+    }
+    $provider = $options['provider'] ?? 'claude';
+    if (! in_array($provider, ['claude', 'codex'], true)) {
+        throw new InvalidArgumentException('provider must be claude or codex');
     }
     if (PHP_OS_FAMILY !== 'Windows') {
         throw new \Prism\Acp\Process\ContainmentUnavailable('this preview supports Windows Job Objects only');
@@ -41,7 +47,11 @@ try {
     if ($cwd === false || ! is_dir($cwd)) {
         throw new InvalidArgumentException('the working directory does not exist');
     }
-    $base = new ClaudeDriverOptions(
+    $base = $provider === 'codex' ? new CodexDriverOptions(
+        cwd: $cwd,
+        binary: $options['codex-binary'] ?? 'codex',
+        model: isset($options['model']) ? Meta::assertModel($options['model']) : null,
+    ) : new ClaudeDriverOptions(
         cwd: $cwd,
         binary: $options['claude-binary'] ?? 'claude',
         model: isset($options['model']) ? Meta::assertModel($options['model']) : null,
@@ -50,8 +60,10 @@ try {
     );
     $served = Stdio::serve(Stdio::stdin(), STDOUT, fn (JsonRpcPeer $peer) => new AcpAgent(
         peer: $peer,
-        driverFactory: fn (array $session, DriverEvents $events) => new ClaudeDriver($base->forSession($session), $events),
-        driverCapabilities: [...ClaudeDriver::CAPABILITIES, 'permissionRequests' => true],
+        driverFactory: fn (array $session, DriverEvents $events) => $base instanceof CodexDriverOptions
+            ? new CodexDriver($base->forSession($session), $events)
+            : new ClaudeDriver($base->forSession($session), $events),
+        driverCapabilities: $provider === 'codex' ? CodexDriver::CAPABILITIES : [...ClaudeDriver::CAPABILITIES, 'permissionRequests' => true],
     ));
     $served['closed']->await();
 } catch (Throwable $error) {
