@@ -9,7 +9,8 @@ use Prism\Acp\Env\ChildEnv;
 /**
  * A temporary directory only this process's user can read, made BEFORE a credential is written into it. On Windows a
  * file mode means nothing, so inherited grants are removed and the current identity alone is granted access, as the
- * reference does with whoami and icacls. Any failure removes the directory and says so without naming a path.
+ * intended policy requires. Existing explicit grants are cleared too. Any failure removes the directory and says so
+ * without naming a path.
  */
 final class PrivateDirectory
 {
@@ -63,6 +64,8 @@ final class PrivateDirectory
         if (preg_match('/\bS-\d+(?:-\d+)+\b/', $identity, $sid) !== 1) {
             throw new \RuntimeException('cannot identify the Windows process identity');
         }
+        // /inheritance:r alone preserves explicit non-owner grants. This directory is still new and empty.
+        self::run([$system32.'\\icacls.exe', $directory, '/reset'], $env);
         self::run([$system32.'\\icacls.exe', $directory, '/inheritance:r', '/grant:r', "*{$sid[0]}:(OI)(CI)F"], $env);
     }
 

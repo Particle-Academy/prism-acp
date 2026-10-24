@@ -12,7 +12,9 @@ use Prism\Acp\Codex\CodexTransportOptions;
 use Prism\Acp\Credentials\ApiKeyHome;
 use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Env\ChildEnv;
+use Prism\Acp\Support\PrivateDirectory;
 use Tests\Support\ScriptedCodexTransport;
+use Tests\Support\WindowsPermissions;
 
 function credentialScratch(): string
 {
@@ -39,36 +41,37 @@ it('creates a nested app home privately, accepts existing homes and imposes no k
         if (PHP_OS_FAMILY !== 'Windows') {
             expect(fileperms($home) & 0777)->toBe(0700);
         } else {
-            $template = <<<'PS'
-            $ErrorActionPreference = 'Stop';
-            $acl = [System.IO.Directory]::GetAccessControl('FIXTURE_HOME');
-            $rules = $acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]);
-            $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value;
-            $ok = $acl.AreAccessRulesProtected -and $rules.Count -gt 0;
-            $evidence = "protected=$($acl.AreAccessRulesProtected); currentSid=$sid";
-            foreach ($rule in $rules) {
-                if ($rule.IdentityReference.Value -ne $sid -or $rule.AccessControlType -ne 'Allow') { $ok = $false }
-                $evidence += "; sid=$($rule.IdentityReference.Value), type=$($rule.AccessControlType), inherited=$($rule.IsInherited), rights=$($rule.FileSystemRights)";
-            }
-            [Console]::Out.WriteLine($evidence);
-            if ($ok) { exit 0 } else { exit 1 }
-            PS;
-            // Query the OS ACL without importing PowerShell 7 modules into Windows PowerShell 5.
-            $command = str_replace('FIXTURE_HOME', str_replace("'", "''", $home), $template);
-            $powershell = (getenv('SystemRoot') ?: 'C:\\Windows').'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
-            $process = proc_open([$powershell, '-NoProfile', '-NonInteractive', '-Command', $command],
-                [0 => ['file', 'NUL', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, options: ['bypass_shell' => true]);
-            $evidence = '';
-            if (is_resource($process)) {
-                $evidence = stream_get_contents($pipes[1]).stream_get_contents($pipes[2]);
-                fclose($pipes[1]);
-                fclose($pipes[2]);
-            }
-            $this->assertSame(0, is_resource($process) ? proc_close($process) : -1, 'new home must have only the current identity, with inheritance removed: '.$evidence);
+            $acl = WindowsPermissions::inspect($home);
+            $this->assertSame(0, $acl['code'], 'new home must have only the current identity, with inheritance removed: '.$acl['evidence']);
         }
     } finally {
         @rmdir($home);
         @rmdir(dirname($home));
+        @rmdir($root);
+    }
+});
+
+it('removes explicit non-owner grants before a new native home can receive credentials', function (): void {
+    if (PHP_OS_FAMILY !== 'Windows') {
+        $this->markTestSkipped('Windows DACL grants are platform-specific');
+    }
+    $root = credentialScratch();
+    $home = $root.DIRECTORY_SEPARATOR.'new';
+    mkdir($home, 0700);
+    try {
+        PrivateDirectory::protect($home);
+        $icacls = (getenv('SystemRoot') ?: 'C:\\Windows').'\\System32\\icacls.exe';
+        $process = proc_open([$icacls, $home, '/grant', '*S-1-1-0:(OI)(CI)RX'],
+            [0 => ['file', 'NUL', 'r'], 1 => ['file', 'NUL', 'w'], 2 => ['file', 'NUL', 'w']], $pipes, options: ['bypass_shell' => true]);
+        $this->assertSame(0, is_resource($process) ? proc_close($process) : -1, 'the owned empty fixture must have an explicit Everyone grant');
+        $before = WindowsPermissions::inspect($home);
+        expect($before['code'])->toBe(1)->and($before['evidence'])->toContain('S-1-1-0')->toContain('inherited=False');
+
+        PrivateDirectory::protect($home);
+        $after = WindowsPermissions::inspect($home);
+        $this->assertSame(0, $after['code'], 'explicit grants must be removed, not only inherited grants: '.$after['evidence']);
+    } finally {
+        @rmdir($home);
         @rmdir($root);
     }
 });
