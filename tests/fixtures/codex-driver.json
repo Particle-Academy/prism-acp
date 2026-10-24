@@ -1,8 +1,8 @@
 {
   "reference": {
     "package": "@particle-academy/prism-acp",
-    "version": "0.25.0",
-    "source": "e24c27e78b92c735a8b357265cf9df6d2bf877c7"
+    "version": "0.25.1",
+    "source": "d78555a4884e60ad1d8766eead8f2a7f40eb3eb7"
   },
   "scenarios": [
     {
@@ -14684,6 +14684,911 @@
           }
         ],
         "closes": 1
+      }
+    },
+    {
+      "name": "api-key-start",
+      "auditCredentials": true,
+      "options": {
+        "credentials": {
+          "mode": "apiKey",
+          "apiKey": "dummy-explicit-key",
+          "home": "@key-home"
+        },
+        "parentEnv": {
+          "codex_home": "@subscription-home",
+          "OPENAI_API_KEY": "dummy-inherited-key",
+          "ANTHROPIC_API_KEY": "dummy-inherited-key"
+        }
+      },
+      "actions": [],
+      "expected": {
+        "sent": [
+          {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+              "clientInfo": {
+                "name": "@particle-academy/prism-acp",
+                "version": "0.4.1"
+              },
+              "capabilities": {}
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "initialized"
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "account/login/start",
+            "id": 2,
+            "params": {
+              "type": "apiKey",
+              "apiKey": "dummy-explicit-key"
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "thread/start",
+            "id": 3,
+            "params": {
+              "cwd": "/fixture",
+              "approvalPolicy": "on-request"
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "account/rateLimits/read",
+            "id": 4,
+            "params": {}
+          }
+        ],
+        "events": [
+          {
+            "type": "update",
+            "value": {
+              "sessionUpdate": "notice",
+              "notice": {
+                "level": "debug",
+                "message": "Codex session started"
+              },
+              "_meta": {
+                "particle.academy/cli_session_id": "thread-fixture"
+              }
+            }
+          },
+          {
+            "type": "update",
+            "value": {
+              "sessionUpdate": "notice",
+              "notice": {
+                "level": "debug",
+                "message": "model"
+              },
+              "_meta": {
+                "particle.academy/model": "fixture-model"
+              }
+            }
+          },
+          {
+            "type": "update",
+            "value": {
+              "sessionUpdate": "notice",
+              "notice": {
+                "level": "info",
+                "message": "Codex rate limit: 10% used in 300 minutes, resets 2027-01-15T08:00:00.000Z."
+              },
+              "_meta": {
+                "particle.academy/rate_limit": {
+                  "ordinaryUsageAllowed": true,
+                  "primary": {
+                    "usedPercent": 10,
+                    "windowDurationMins": 300,
+                    "resetsAtMs": 1800000000000
+                  },
+                  "secondary": null
+                }
+              }
+            }
+          },
+          {
+            "type": "exit",
+            "code": null,
+            "signal": "SIGTERM"
+          }
+        ],
+        "closes": 1,
+        "childEnv": {
+          "CODEX_HOME": "@key-home"
+        },
+        "withheld": [
+          "OPENAI_API_KEY",
+          "ANTHROPIC_API_KEY"
+        ]
+      }
+    },
+    {
+      "name": "api-key-resume",
+      "auditCredentials": true,
+      "options": {
+        "credentials": {
+          "mode": "apiKey",
+          "apiKey": "dummy-explicit-key",
+          "home": "@key-home"
+        },
+        "parentEnv": {
+          "codex_home": "@subscription-home",
+          "OPENAI_API_KEY": "dummy-inherited-key",
+          "ANTHROPIC_API_KEY": "dummy-inherited-key"
+        },
+        "resumeSessionId": "thread-fixture"
+      },
+      "actions": [],
+      "expected": {
+        "sent": [
+          {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+              "clientInfo": {
+                "name": "@particle-academy/prism-acp",
+                "version": "0.4.1"
+              },
+              "capabilities": {}
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "initialized"
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "account/login/start",
+            "id": 2,
+            "params": {
+              "type": "apiKey",
+              "apiKey": "dummy-explicit-key"
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "thread/resume",
+            "id": 3,
+            "params": {
+              "threadId": "thread-fixture",
+              "cwd": "/fixture",
+              "excludeTurns": true
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "thread/turns/list",
+            "id": 4,
+            "params": {
+              "threadId": "thread-fixture",
+              "sortDirection": "asc",
+              "itemsView": "notLoaded",
+              "limit": 100
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "account/rateLimits/read",
+            "id": 5,
+            "params": {}
+          }
+        ],
+        "events": [
+          {
+            "type": "update",
+            "value": {
+              "sessionUpdate": "notice",
+              "notice": {
+                "level": "debug",
+                "message": "Codex session started"
+              },
+              "_meta": {
+                "particle.academy/cli_session_id": "thread-fixture"
+              }
+            }
+          },
+          {
+            "type": "update",
+            "value": {
+              "sessionUpdate": "notice",
+              "notice": {
+                "level": "debug",
+                "message": "model"
+              },
+              "_meta": {
+                "particle.academy/model": "fixture-model"
+              }
+            }
+          },
+          {
+            "type": "update",
+            "value": {
+              "sessionUpdate": "notice",
+              "notice": {
+                "level": "info",
+                "message": "Codex rate limit: 10% used in 300 minutes, resets 2027-01-15T08:00:00.000Z."
+              },
+              "_meta": {
+                "particle.academy/rate_limit": {
+                  "ordinaryUsageAllowed": true,
+                  "primary": {
+                    "usedPercent": 10,
+                    "windowDurationMins": 300,
+                    "resetsAtMs": 1800000000000
+                  },
+                  "secondary": null
+                }
+              }
+            }
+          },
+          {
+            "type": "exit",
+            "code": null,
+            "signal": "SIGTERM"
+          }
+        ],
+        "closes": 1,
+        "childEnv": {
+          "CODEX_HOME": "@key-home"
+        },
+        "withheld": [
+          "OPENAI_API_KEY",
+          "ANTHROPIC_API_KEY"
+        ]
+      }
+    },
+    {
+      "name": "api-key-login-missing",
+      "auditCredentials": true,
+      "options": {
+        "credentials": {
+          "mode": "apiKey",
+          "apiKey": "dummy-explicit-key",
+          "home": "@key-home"
+        },
+        "parentEnv": {
+          "codex_home": "@subscription-home",
+          "OPENAI_API_KEY": "dummy-inherited-key",
+          "ANTHROPIC_API_KEY": "dummy-inherited-key"
+        }
+      },
+      "replies": {
+        "account/login/start": [
+          {
+            "result": {}
+          }
+        ]
+      },
+      "actions": [],
+      "expected": {
+        "sent": [
+          {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+              "clientInfo": {
+                "name": "@particle-academy/prism-acp",
+                "version": "0.4.1"
+              },
+              "capabilities": {}
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "initialized"
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "account/login/start",
+            "id": 2,
+            "params": {
+              "type": "apiKey",
+              "apiKey": "dummy-explicit-key"
+            }
+          }
+        ],
+        "events": [
+          {
+            "type": "problem",
+            "problem": "Codex app-server startup failed (Error)"
+          },
+          {
+            "type": "exit",
+            "code": null,
+            "signal": "SIGTERM"
+          }
+        ],
+        "closes": 1,
+        "childEnv": {
+          "CODEX_HOME": "@key-home"
+        },
+        "withheld": [
+          "OPENAI_API_KEY",
+          "ANTHROPIC_API_KEY"
+        ]
+      }
+    },
+    {
+      "name": "api-key-login-null",
+      "auditCredentials": true,
+      "options": {
+        "credentials": {
+          "mode": "apiKey",
+          "apiKey": "dummy-explicit-key",
+          "home": "@key-home"
+        },
+        "parentEnv": {
+          "codex_home": "@subscription-home",
+          "OPENAI_API_KEY": "dummy-inherited-key",
+          "ANTHROPIC_API_KEY": "dummy-inherited-key"
+        }
+      },
+      "replies": {
+        "account/login/start": [
+          {
+            "result": null
+          }
+        ]
+      },
+      "actions": [],
+      "expected": {
+        "sent": [
+          {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+              "clientInfo": {
+                "name": "@particle-academy/prism-acp",
+                "version": "0.4.1"
+              },
+              "capabilities": {}
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "initialized"
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "account/login/start",
+            "id": 2,
+            "params": {
+              "type": "apiKey",
+              "apiKey": "dummy-explicit-key"
+            }
+          }
+        ],
+        "events": [
+          {
+            "type": "problem",
+            "problem": "Codex app-server startup failed (Error)"
+          },
+          {
+            "type": "exit",
+            "code": null,
+            "signal": "SIGTERM"
+          }
+        ],
+        "closes": 1,
+        "childEnv": {
+          "CODEX_HOME": "@key-home"
+        },
+        "withheld": [
+          "OPENAI_API_KEY",
+          "ANTHROPIC_API_KEY"
+        ]
+      }
+    },
+    {
+      "name": "api-key-login-array",
+      "auditCredentials": true,
+      "options": {
+        "credentials": {
+          "mode": "apiKey",
+          "apiKey": "dummy-explicit-key",
+          "home": "@key-home"
+        },
+        "parentEnv": {
+          "codex_home": "@subscription-home",
+          "OPENAI_API_KEY": "dummy-inherited-key",
+          "ANTHROPIC_API_KEY": "dummy-inherited-key"
+        }
+      },
+      "replies": {
+        "account/login/start": [
+          {
+            "result": []
+          }
+        ]
+      },
+      "actions": [],
+      "expected": {
+        "sent": [
+          {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+              "clientInfo": {
+                "name": "@particle-academy/prism-acp",
+                "version": "0.4.1"
+              },
+              "capabilities": {}
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "initialized"
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "account/login/start",
+            "id": 2,
+            "params": {
+              "type": "apiKey",
+              "apiKey": "dummy-explicit-key"
+            }
+          }
+        ],
+        "events": [
+          {
+            "type": "problem",
+            "problem": "Codex app-server startup failed (Error)"
+          },
+          {
+            "type": "exit",
+            "code": null,
+            "signal": "SIGTERM"
+          }
+        ],
+        "closes": 1,
+        "childEnv": {
+          "CODEX_HOME": "@key-home"
+        },
+        "withheld": [
+          "OPENAI_API_KEY",
+          "ANTHROPIC_API_KEY"
+        ]
+      }
+    },
+    {
+      "name": "api-key-login-wrong",
+      "auditCredentials": true,
+      "options": {
+        "credentials": {
+          "mode": "apiKey",
+          "apiKey": "dummy-explicit-key",
+          "home": "@key-home"
+        },
+        "parentEnv": {
+          "codex_home": "@subscription-home",
+          "OPENAI_API_KEY": "dummy-inherited-key",
+          "ANTHROPIC_API_KEY": "dummy-inherited-key"
+        }
+      },
+      "replies": {
+        "account/login/start": [
+          {
+            "result": {
+              "type": "chatgpt"
+            }
+          }
+        ]
+      },
+      "actions": [],
+      "expected": {
+        "sent": [
+          {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+              "clientInfo": {
+                "name": "@particle-academy/prism-acp",
+                "version": "0.4.1"
+              },
+              "capabilities": {}
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "initialized"
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "account/login/start",
+            "id": 2,
+            "params": {
+              "type": "apiKey",
+              "apiKey": "dummy-explicit-key"
+            }
+          }
+        ],
+        "events": [
+          {
+            "type": "problem",
+            "problem": "Codex app-server startup failed (Error)"
+          },
+          {
+            "type": "exit",
+            "code": null,
+            "signal": "SIGTERM"
+          }
+        ],
+        "closes": 1,
+        "childEnv": {
+          "CODEX_HOME": "@key-home"
+        },
+        "withheld": [
+          "OPENAI_API_KEY",
+          "ANTHROPIC_API_KEY"
+        ]
+      }
+    },
+    {
+      "name": "api-key-login-error",
+      "auditCredentials": true,
+      "options": {
+        "credentials": {
+          "mode": "apiKey",
+          "apiKey": "dummy-explicit-key",
+          "home": "@key-home"
+        },
+        "parentEnv": {
+          "codex_home": "@subscription-home",
+          "OPENAI_API_KEY": "dummy-inherited-key",
+          "ANTHROPIC_API_KEY": "dummy-inherited-key"
+        }
+      },
+      "replies": {
+        "account/login/start": [
+          {
+            "error": {
+              "code": -1,
+              "message": "provider echoed dummy-explicit-key"
+            }
+          }
+        ]
+      },
+      "actions": [],
+      "expected": {
+        "sent": [
+          {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+              "clientInfo": {
+                "name": "@particle-academy/prism-acp",
+                "version": "0.4.1"
+              },
+              "capabilities": {}
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "initialized"
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "account/login/start",
+            "id": 2,
+            "params": {
+              "type": "apiKey",
+              "apiKey": "dummy-explicit-key"
+            }
+          }
+        ],
+        "events": [
+          {
+            "type": "problem",
+            "problem": "Codex app-server startup failed (Error)"
+          },
+          {
+            "type": "exit",
+            "code": null,
+            "signal": "SIGTERM"
+          }
+        ],
+        "closes": 1,
+        "childEnv": {
+          "CODEX_HOME": "@key-home"
+        },
+        "withheld": [
+          "OPENAI_API_KEY",
+          "ANTHROPIC_API_KEY"
+        ]
+      }
+    },
+    {
+      "name": "api-key-mcp-binding-together",
+      "auditCredentials": true,
+      "auditMcp": true,
+      "options": {
+        "credentials": {
+          "mode": "apiKey",
+          "apiKey": "dummy-explicit-key",
+          "home": "@key-home"
+        },
+        "parentEnv": {
+          "codex_home": "@subscription-home",
+          "OPENAI_API_KEY": "dummy-inherited-key",
+          "ANTHROPIC_API_KEY": "dummy-inherited-key"
+        },
+        "mcpServers": [
+          {
+            "type": "http",
+            "name": "fixture-mcp",
+            "url": "http://127.0.0.1:1/mcp",
+            "headers": [
+              {
+                "name": "aUtHoRiZaTiOn",
+                "value": "  Bearer fixture-explicit-token\t"
+              },
+              {
+                "name": "X-Fixture",
+                "value": "retained"
+              }
+            ]
+          }
+        ]
+      },
+      "replies": {
+        "config/read": [
+          {
+            "result": {
+              "config": {}
+            }
+          }
+        ]
+      },
+      "actions": [],
+      "expected": {
+        "sent": [
+          {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+              "clientInfo": {
+                "name": "@particle-academy/prism-acp",
+                "version": "0.4.1"
+              },
+              "capabilities": {}
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "initialized"
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "account/login/start",
+            "id": 2,
+            "params": {
+              "type": "apiKey",
+              "apiKey": "dummy-explicit-key"
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "config/read",
+            "id": 3,
+            "params": {
+              "cwd": "/fixture",
+              "includeLayers": false
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "thread/start",
+            "id": 4,
+            "params": {
+              "cwd": "/fixture",
+              "approvalPolicy": "on-request",
+              "config": {
+                "mcp_servers": {
+                  "fixture-mcp": {
+                    "url": "http://127.0.0.1:1/mcp",
+                    "http_headers": {
+                      "X-Fixture": "retained"
+                    },
+                    "bearer_token_env_var": "PRISM_ACP_MCP_TOKEN_FIXTURE_0"
+                  }
+                },
+                "features": {
+                  "shell_snapshot": false
+                },
+                "shell_environment_policy": {
+                  "exclude": [
+                    "PRISM_ACP_MCP_TOKEN_FIXTURE_0"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "account/rateLimits/read",
+            "id": 5,
+            "params": {}
+          }
+        ],
+        "events": [
+          {
+            "type": "update",
+            "value": {
+              "sessionUpdate": "notice",
+              "notice": {
+                "level": "debug",
+                "message": "Codex session started"
+              },
+              "_meta": {
+                "particle.academy/cli_session_id": "thread-fixture"
+              }
+            }
+          },
+          {
+            "type": "update",
+            "value": {
+              "sessionUpdate": "notice",
+              "notice": {
+                "level": "debug",
+                "message": "model"
+              },
+              "_meta": {
+                "particle.academy/model": "fixture-model"
+              }
+            }
+          },
+          {
+            "type": "update",
+            "value": {
+              "sessionUpdate": "notice",
+              "notice": {
+                "level": "info",
+                "message": "Codex rate limit: 10% used in 300 minutes, resets 2027-01-15T08:00:00.000Z."
+              },
+              "_meta": {
+                "particle.academy/rate_limit": {
+                  "ordinaryUsageAllowed": true,
+                  "primary": {
+                    "usedPercent": 10,
+                    "windowDurationMins": 300,
+                    "resetsAtMs": 1800000000000
+                  },
+                  "secondary": null
+                }
+              }
+            }
+          },
+          {
+            "type": "exit",
+            "code": null,
+            "signal": "SIGTERM"
+          }
+        ],
+        "closes": 1,
+        "childEnv": {
+          "CODEX_HOME": "@key-home",
+          "PRISM_ACP_MCP_TOKEN_FIXTURE_0": "fixture-explicit-token"
+        },
+        "withheld": [
+          "OPENAI_API_KEY",
+          "ANTHROPIC_API_KEY"
+        ]
+      }
+    },
+    {
+      "name": "explicit-subscription-no-login",
+      "auditCredentials": true,
+      "options": {
+        "credentials": {
+          "mode": "subscription"
+        }
+      },
+      "actions": [],
+      "expected": {
+        "sent": [
+          {
+            "jsonrpc": "2.0",
+            "method": "initialize",
+            "id": 1,
+            "params": {
+              "clientInfo": {
+                "name": "@particle-academy/prism-acp",
+                "version": "0.4.1"
+              },
+              "capabilities": {}
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "initialized"
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "thread/start",
+            "id": 2,
+            "params": {
+              "cwd": "/fixture",
+              "approvalPolicy": "on-request"
+            }
+          },
+          {
+            "jsonrpc": "2.0",
+            "method": "account/rateLimits/read",
+            "id": 3,
+            "params": {}
+          }
+        ],
+        "events": [
+          {
+            "type": "update",
+            "value": {
+              "sessionUpdate": "notice",
+              "notice": {
+                "level": "debug",
+                "message": "Codex session started"
+              },
+              "_meta": {
+                "particle.academy/cli_session_id": "thread-fixture"
+              }
+            }
+          },
+          {
+            "type": "update",
+            "value": {
+              "sessionUpdate": "notice",
+              "notice": {
+                "level": "debug",
+                "message": "model"
+              },
+              "_meta": {
+                "particle.academy/model": "fixture-model"
+              }
+            }
+          },
+          {
+            "type": "update",
+            "value": {
+              "sessionUpdate": "notice",
+              "notice": {
+                "level": "info",
+                "message": "Codex rate limit: 10% used in 300 minutes, resets 2027-01-15T08:00:00.000Z."
+              },
+              "_meta": {
+                "particle.academy/rate_limit": {
+                  "ordinaryUsageAllowed": true,
+                  "primary": {
+                    "usedPercent": 10,
+                    "windowDurationMins": 300,
+                    "resetsAtMs": 1800000000000
+                  },
+                  "secondary": null
+                }
+              }
+            }
+          },
+          {
+            "type": "exit",
+            "code": null,
+            "signal": "SIGTERM"
+          }
+        ],
+        "closes": 1,
+        "childEnv": {},
+        "withheld": []
       }
     }
   ]

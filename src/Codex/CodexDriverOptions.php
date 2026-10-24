@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Prism\Acp\Codex;
 
+use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Mcp\McpServers;
 
 /** Trusted host options. Per-session ACP values enter only through forSession.
@@ -32,6 +33,7 @@ final readonly class CodexDriverOptions
         public ?string $approvalPolicy = null,
         public ?string $sandbox = null,
         public array $mcpToolApproval = [],
+        public ?ProviderCredentials $credentials = null,
     ) {}
 
     /** @param array{cwd: string, mcpServers: list<Server>, resumeSessionId?: string} $session */
@@ -41,6 +43,6 @@ final readonly class CodexDriverOptions
             parentEnv: $this->parentEnv, allowEnv: $this->allowEnv, resumeSessionId: $session['resumeSessionId'] ?? null,
             mcpServers: $session['mcpServers'], disabledMcpServers: $this->disabledMcpServers,
             turnInactivityTimeoutMs: $this->turnInactivityTimeoutMs, model: $this->model,
-            approvalPolicy: $this->approvalPolicy, sandbox: $this->sandbox, mcpToolApproval: $this->mcpToolApproval);
+            approvalPolicy: $this->approvalPolicy, sandbox: $this->sandbox, mcpToolApproval: $this->mcpToolApproval, credentials: $this->credentials);
     }
 }

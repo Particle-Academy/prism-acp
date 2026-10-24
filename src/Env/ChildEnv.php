@@ -87,6 +87,12 @@ final class ChildEnv
         }
 
         foreach ($set as $name => $value) {
+            // An explicit home must replace alternate-case inherited spellings on Windows as in the reference.
+            foreach (array_keys($env) as $existing) {
+                if (strtoupper((string) $existing) === strtoupper((string) $name)) {
+                    unset($env[$existing]);
+                }
+            }
             $env[(string) $name] = $value;
         }
 

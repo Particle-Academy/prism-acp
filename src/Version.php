@@ -6,5 +6,5 @@ namespace Prism\Acp;
 
 final class Version
 {
-    public const VERSION = '0.1.0-alpha.3';
+    public const VERSION = '0.1.0-alpha.4';
 }

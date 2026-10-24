@@ -12,6 +12,7 @@ use Prism\Acp\Codex\CodexDriverOptions;
 use Prism\Acp\Codex\CodexTransportHandlers;
 use Prism\Acp\Codex\CodexTransportOptions;
 use Prism\Acp\Codex\StdioCodexTransport;
+use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Process\StopVerdict;
 
 /** A synthetic peer over real pipes and Job Object containment, independent of the injected oracle transport. */
@@ -110,6 +111,52 @@ final class CodexHarness
 }
 
 describe('CodexDriver against a contained process', function () {
+    it('logs in with an explicit key before start or resume and uses only the app home', function (?string $resume): void {
+        $root = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-codex-key-'.bin2hex(random_bytes(5));
+        mkdir($root);
+        $home = $root.DIRECTORY_SEPARATOR.'app';
+        $h = new CodexHarness(new Loop, ['credentials' => new ProviderCredentials('apiKey', 'dummy-explicit-key', $home), 'resumeSessionId' => $resume]);
+        try {
+            $h->driver->start();
+            $h->turn('keyed turn');
+            $cli = $h->cli();
+            $methods = array_column(array_column($cli, 'stdin'), 'method');
+            $threadMethod = $resume === null ? 'thread/start' : 'thread/resume';
+            expect($cli[0]['codexHome'])->toBe($home)->and($cli[0]['openaiKeyPresent'])->toBeFalse()
+                ->and(array_column($cli, 'keyMatchesDummy'))->toBe([true])
+                ->and(array_search('account/login/start', $methods, true))->toBeLessThan(array_search($threadMethod, $methods, true))
+                ->and(is_file($home.DIRECTORY_SEPARATOR.'fixture-auth.json'))->toBeTrue()
+                ->and(file_get_contents($h->log))->not->toContain('dummy-explicit-key')
+                ->and(implode(' ', $h->problems))->not->toContain('dummy-explicit-key');
+        } finally {
+            $h->finish();
+            if (is_file($home.DIRECTORY_SEPARATOR.'fixture-auth.json')) {
+                unlink($home.DIRECTORY_SEPARATOR.'fixture-auth.json');
+            } if (is_dir($home)) {
+                rmdir($home);
+            } rmdir($root);
+        }
+    })->with([[null], ['thread-existing']]);
+
+    it('refuses unconfirmed login over real pipes before any thread and redacts echoed errors', function (string $reply): void {
+        $root = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-codex-key-fail-'.bin2hex(random_bytes(5));
+        mkdir($root);
+        $home = $root.DIRECTORY_SEPARATOR.'app';
+        $h = new CodexHarness(new Loop, ['credentials' => new ProviderCredentials('apiKey', 'dummy-explicit-key', $home),
+            'binaryArgs' => [dirname(__DIR__).'/fixtures/fake-codex.php', '--fixture-login='.$reply]]);
+        try {
+            $h->driver->start();
+            $h->driver->ready()->await();
+            expect($h->requests('thread/start'))->toBe([])->and($h->requests('thread/resume'))->toBe([])
+                ->and($h->problems)->not->toBe([])->and(implode(' ', $h->problems))->not->toContain('dummy-explicit-key');
+        } finally {
+            $h->finish();
+            if (is_dir($home)) {
+                rmdir($home);
+            } rmdir($root);
+        }
+    })->with(['missing', 'wrong', 'error']);
+
     it('launches app-server, withholds ambient credentials, echoes Unicode and pages models', function () {
         $h = new CodexHarness(new Loop, ['sandbox' => 'read-only', 'model' => 'fixture-model']);
         try {

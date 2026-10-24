@@ -20,15 +20,23 @@ final class PrivateDirectory
             throw new \RuntimeException('failed to create a private temporary directory');
         }
         try {
-            if (PHP_OS_FAMILY === 'Windows') {
-                self::restrictOnWindows($directory);
-            }
+            self::protect($directory);
         } catch (\Throwable) {
             @rmdir($directory);
             throw new \RuntimeException('failed to protect a private temporary directory');
         }
 
         return $directory;
+    }
+
+    /** Restrict a newly-created host-chosen directory BEFORE the native CLI can write credentials into it. */
+    public static function protect(string $directory): void
+    {
+        if (PHP_OS_FAMILY === 'Windows') {
+            self::restrictOnWindows($directory);
+        } elseif (! @chmod($directory, 0700)) {
+            throw new \RuntimeException('failed to protect a private directory');
+        }
     }
 
     /** Remove the files named and then the directory. Returns false when something could not be removed. */

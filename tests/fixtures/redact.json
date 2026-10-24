@@ -1,0 +1,106 @@
+{
+  "reference": "@particle-academy/prism-acp 0.25.1",
+  "source": "d78555a4884e60ad1d8766eead8f2a7f40eb3eb7",
+  "chunking": "decoded Unicode code points",
+  "scenarios": [
+    {
+      "name": "whole-and-repeated",
+      "secret": "dummy-explicit-key",
+      "text": "error dummy-explicit-key\nretry dummy-explicit-key.",
+      "expected": {
+        "ok": true,
+        "splitCount": 1326,
+        "sha256": "ede7af0f427b74a373d5bff3cb6f5a90f5d28825bd58f0fe8e796d5faa478b90"
+      }
+    },
+    {
+      "name": "dangling-long",
+      "secret": "dummy-explicit-key",
+      "text": "cut off: dummy-ex",
+      "expected": {
+        "ok": true,
+        "splitCount": 171,
+        "sha256": "86e5c50b3fb9026a0607a056dcc9981b4cc9bdec1c66c7b6230437a182343e9a"
+      }
+    },
+    {
+      "name": "dangling-four",
+      "secret": "dummy-explicit-key",
+      "text": "cut off: dumm",
+      "expected": {
+        "ok": true,
+        "splitCount": 105,
+        "sha256": "2a7068edfcd6efa2dac3b28c627cea9723c4bd58acb33a6d7c68cd6bb0ac7664"
+      }
+    },
+    {
+      "name": "dangling-three",
+      "secret": "dummy-explicit-key",
+      "text": "cut off: dum",
+      "expected": {
+        "ok": true,
+        "splitCount": 91,
+        "sha256": "1cde40c35530a3b94e0d6a4fdb907795aaa8658b6c5bc38a76a6621e436762fa"
+      }
+    },
+    {
+      "name": "prefix-mismatch-released",
+      "secret": "dummy-explicit-key",
+      "text": "dummy sky blue",
+      "expected": {
+        "ok": true,
+        "splitCount": 120,
+        "sha256": "f4e2dde6bcaed4325e27f358be948826493850b838f3f2a12be7788787cf222d"
+      }
+    },
+    {
+      "name": "unicode",
+      "secret": "密钥😀-fixture",
+      "text": "前 密钥😀-fixture 后 密钥😀",
+      "expected": {
+        "ok": true,
+        "splitCount": 210,
+        "sha256": "ab02aadf86fe19e76be363ab59026a27299197dcbf48d3e9475913651f11abc3"
+      }
+    },
+    {
+      "name": "overlap",
+      "secret": "ababa",
+      "text": "abababababa",
+      "expected": {
+        "ok": true,
+        "splitCount": 78,
+        "sha256": "5c61434a81395ff6cacac381dd6887d3a47ee2ddec591dca278583f8e28a013b"
+      }
+    },
+    {
+      "name": "short-secret-marker",
+      "secret": "a",
+      "text": "a a",
+      "expected": {
+        "ok": true,
+        "splitCount": 10,
+        "sha256": "f2b8d50b5c17783f7a94b6f4570f34a5d2046ca3a11a9ac05e0cb08e2b49f797"
+      }
+    },
+    {
+      "name": "marker-as-secret",
+      "secret": "[redacted]",
+      "text": "[redacted] tail",
+      "expected": {
+        "ok": true,
+        "splitCount": 136,
+        "sha256": "11c8fec7ca4092c03e427f917c24fdbd57026de1a240a93220a3535efb45f525"
+      }
+    },
+    {
+      "name": "empty-refused",
+      "secret": "",
+      "text": "plain",
+      "expected": {
+        "ok": false,
+        "message": "a secret to redact cannot be empty"
+      }
+    }
+  ]
+}

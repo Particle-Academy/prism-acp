@@ -19,7 +19,11 @@ $record = function (mixed $entry) use ($log): void {
 };
 $argv = array_slice($_SERVER['argv'], 1);
 $env = getenv();
-$record(['argv' => $argv, 'env' => array_keys($env)]);
+$keyMatchesDummy = getenv('ANTHROPIC_API_KEY') === 'dummy-explicit-key';
+$record(['argv' => $argv, 'env' => array_keys($env), 'claudeHome' => getenv('CLAUDE_CONFIG_DIR'), 'keyMatchesDummy' => $keyMatchesDummy]);
+if ($keyMatchesDummy && is_dir((string) getenv('CLAUDE_CONFIG_DIR'))) {
+    file_put_contents(getenv('CLAUDE_CONFIG_DIR').DIRECTORY_SEPARATOR.'fixture-auth.json', '{"authMode":"apiKey"}');
+}
 
 $emit = function (array $frame): void {
     fwrite(STDOUT, json_encode($frame, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
@@ -134,6 +138,25 @@ while (($line = fgets(STDIN)) !== false) {
         $result();
 
         continue;
+    }
+    if ($said === 'stderr-key') {
+        $key = getenv('ANTHROPIC_API_KEY') ?: '';
+        fwrite(STDERR, 'fixture diagnostic 雪 '.substr($key, 0, 7));
+        fflush(STDERR);
+        usleep(40000);
+        fwrite(STDERR, substr($key, 7)." complete\n");
+        fflush(STDERR);
+        $text($turn, 'fixture completed');
+        $result();
+
+        continue;
+    }
+    if ($said === 'stderr-cutoff') {
+        fwrite(STDERR, 'fixture cutoff '.substr(getenv('ANTHROPIC_API_KEY') ?: '', 0, 8));
+        fflush(STDERR);
+        $text($turn, 'fixture completed');
+        $result();
+        exit(0);
     }
     if ($said === 'settings') {
         $text($turn, (string) file_get_contents((string) $option('--settings')));

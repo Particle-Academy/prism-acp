@@ -2,12 +2,13 @@
 // These are schema-aligned protocol scenarios, not a claim of native live turn captures.
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 const reference = resolve(process.argv[2] ?? '');
 const version = JSON.parse(readFileSync(join(reference, 'package.json'), 'utf8')).version;
-assert.equal(version, '0.25.0', 'use the reviewed published reference');
+assert.equal(version, '0.25.1', 'use the reviewed published reference');
 const { CodexDriver } = await import(pathToFileURL(join(reference, 'dist/index.js')).href);
 const notify = (method, params) => ({ type: 'frame', frame: { jsonrpc: '2.0', method, params } });
 const request = (method, params) => ({ type: 'frame', frame: { jsonrpc: '2.0', id: 'approval-fixture', method, params } });
@@ -141,6 +142,18 @@ function compactLargeText(value){
   return value;
 }
 const fixtures = [];
+const credentialRoot=mkdtempSync(join(tmpdir(),'prism-acp-codex-key-oracle-'));
+const keyedOptions={credentials:{mode:'apiKey',apiKey:'dummy-explicit-key',home:'@key-home'},
+  parentEnv:{codex_home:'@subscription-home',OPENAI_API_KEY:'dummy-inherited-key',ANTHROPIC_API_KEY:'dummy-inherited-key'}};
+for(const resume of [false,true])scenarios.push({name:'api-key-'+(resume?'resume':'start'),auditCredentials:true,
+  options:{...keyedOptions,...(resume?{resumeSessionId:'thread-fixture'}:{})},actions:[]});
+for(const [label,reply] of Object.entries({missing:{result:{}},null:{result:null},array:{result:[]},wrong:{result:{type:'chatgpt'}},
+  error:{error:{code:-1,message:'provider echoed dummy-explicit-key'}}}))scenarios.push({name:'api-key-login-'+label,auditCredentials:true,
+    options:keyedOptions,replies:{'account/login/start':[reply]},actions:[]});
+scenarios.push({name:'api-key-mcp-binding-together',auditCredentials:true,auditMcp:true,options:{...keyedOptions,mcpServers:bearerServers},
+  replies:{'config/read':[{result:{config:{}}}]},actions:[]},
+  {name:'explicit-subscription-no-login',auditCredentials:true,options:{credentials:{mode:'subscription'}},actions:[]});
+try {
 for (const scenario of scenarios) {
   const events = []; const sent = []; const indexes = {}; let handlers; let closes = 0; let childEnv;
   const defaultResult = (frame) => {
@@ -149,9 +162,14 @@ for (const scenario of scenarios) {
     if (frame.method === 'thread/turns/list' || frame.method === 'thread/items/list') return {data:[],nextCursor:null};
     if (frame.method === 'model/list') return {data:[{id:'fixture-model',model:'fixture-model',displayName:'Fixture',isDefault:true}],nextCursor:null};
     if (frame.method === 'account/rateLimits/read') return {ordinaryUsageAllowed:true,rateLimits:{primary:{usedPercent:10,windowDurationMins:300,resetsAt:1800000000},secondary:null}};
+    if (frame.method === 'account/login/start') return {type:'apiKey'};
     return {};
   };
-  const driver = new CodexDriver({cwd:'/fixture',parentEnv:{},...scenario.options},{
+  const privateHome=join(credentialRoot,scenario.name,'app');
+  const subscriptionHome=join(credentialRoot,scenario.name,'subscription');
+  const expandHomes=(value)=>typeof value==='string'?value.replaceAll('@key-home',privateHome).replaceAll('@subscription-home',subscriptionHome)
+    :Array.isArray(value)?value.map(expandHomes):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,entry])=>[key,expandHomes(entry)])):value;
+  const driver = new CodexDriver({cwd:'/fixture',parentEnv:{},...expandHomes(scenario.options??{})},{
     onUpdate:(value)=>events.push({type:'update',value}),
     onProtocolError:(problem,detail)=>events.push({type:'problem',problem,...(detail===undefined?{}:{detail})}),
     onTurnEnd:(value)=>events.push({type:'turnEnd',value}),onExit:(code,signal)=>events.push({type:'exit',code,signal}),
@@ -184,6 +202,7 @@ for (const scenario of scenarios) {
     }
   } finally {driver.kill();await drain();}
   const expected={sent,events,closes};
+  if(scenario.auditCredentials){expected.childEnv=childEnv??null;expected.withheld=driver.withheldCredentials;}
   if(scenario.auditMcp){
     const names=Object.keys(childEnv).filter((name)=>name.startsWith('PRISM_ACP_MCP_TOKEN_'));
     assert.equal(names.length,1);assert.match(names[0],/^PRISM_ACP_MCP_TOKEN_[A-F0-9]{32}$/);
@@ -191,8 +210,9 @@ for (const scenario of scenarios) {
     expected.childEnv=childEnv;
     // Normalize only identities already proven to be fresh child bindings; never values or their relationships.
     const text=JSON.stringify(expected).replaceAll(names[0],'PRISM_ACP_MCP_TOKEN_FIXTURE_0');
-    fixtures.push({...scenario,expected:compactLargeText(JSON.parse(text))});
-  } else fixtures.push({...scenario,expected:compactLargeText(expected)});
+    fixtures.push({...scenario,expected:compactLargeText(JSON.parse(text.replaceAll(JSON.stringify(privateHome).slice(1,-1),'@key-home').replaceAll(JSON.stringify(subscriptionHome).slice(1,-1),'@subscription-home')))});
+  } else fixtures.push({...scenario,expected:compactLargeText(JSON.parse(JSON.stringify(expected).replaceAll(JSON.stringify(privateHome).slice(1,-1),'@key-home').replaceAll(JSON.stringify(subscriptionHome).slice(1,-1),'@subscription-home')))});
 }
-writeFileSync(new URL('../../tests/fixtures/codex-driver.json',import.meta.url),JSON.stringify({reference:{package:'@particle-academy/prism-acp',version,source:'e24c27e78b92c735a8b357265cf9df6d2bf877c7'},scenarios:fixtures},null,2)+'\n');
+}finally{assert(credentialRoot.startsWith(join(tmpdir(),'prism-acp-codex-key-oracle-')));rmSync(credentialRoot,{recursive:true,force:true});}
+writeFileSync(new URL('../../tests/fixtures/codex-driver.json',import.meta.url),JSON.stringify({reference:{package:'@particle-academy/prism-acp',version,source:'d78555a4884e60ad1d8766eead8f2a7f40eb3eb7'},scenarios:fixtures},null,2)+'\n');
 console.log('Generated',fixtures.length,'Codex scenarios from published',version);

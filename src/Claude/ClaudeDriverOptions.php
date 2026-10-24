@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Prism\Acp\Claude;
 
+use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Mcp\McpServers;
 
 /**
@@ -43,6 +44,7 @@ final readonly class ClaudeDriverOptions
         public array $allowedTools = [],
         public array $disallowedTools = [],
         public array $disabledMcpServers = [],
+        public ?ProviderCredentials $credentials = null,
     ) {}
 
     /**
@@ -68,6 +70,7 @@ final readonly class ClaudeDriverOptions
             allowedTools: $this->allowedTools,
             disallowedTools: $this->disallowedTools,
             disabledMcpServers: $this->disabledMcpServers,
+            credentials: $this->credentials,
         );
     }
 }

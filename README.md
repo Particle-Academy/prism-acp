@@ -1,20 +1,21 @@
 # Prism ACP for PHP
 
-Speak the Agent Client Protocol to the Claude or Codex CLI you have already signed in to, from plain PHP or an application
-that uses PHP. The core has no third-party runtime dependencies and does not require Laravel or an API key.
+Speak the Agent Client Protocol to Claude or Codex from plain PHP or an application that uses PHP, through a signed-in
+subscription or an API key supplied by the app. The core has no third-party runtime dependencies and does not require Laravel.
 
-**Windows preview for Claude and Codex subscriptions.** Linux/macOS process containment is not implemented;
+**Windows preview for Claude and Codex.** Linux/macOS process containment is not implemented;
 those platforms are refused before a provider starts. Laravel applications can use the core classes;
 automatic service-provider discovery and an artisan command are not included. The pre-release API may change.
 
 ## Install
 
 ```sh
-composer require particle-academy/prism-acp:0.1.0-alpha.3
+composer require particle-academy/prism-acp:0.1.0-alpha.4
 ```
 
 Requires PHP 8.2 or newer, `ext-ctype`, `ext-json`, `ext-mbstring`, Windows with the .NET Framework 4 C# compiler, and an installed,
-signed-in Claude or Codex CLI. The supervisor is compiled locally from the included C# source and hash-checked on every
+Claude or Codex CLI. The shipped command uses its signed-in subscription; embedders can supply API keys as shown below.
+The supervisor is compiled locally from the included C# source and hash-checked on every
 launch. Node is needed only if the chosen installation is an npm shim; it is not a PHP runtime dependency.
 
 ## Run as an ACP agent
@@ -73,7 +74,7 @@ For Codex, use `CodexDriverOptions` and `CodexDriver` from `Prism\Acp\Codex` in 
 `mcpToolApproval` and `turnInactivityTimeoutMs` options. `never` with `danger-full-access` removes approvals and
 Codex's sandbox; choose those options only as host policy. The default ten-minute inactivity timer pauses while
 native work or an approval is outstanding. Typed prompts accept text, images and text resources; images use private
-temporary files removed when the driver stops. API-key mode is not part of this release.
+temporary files removed when the driver stops.
 
 Both option classes accept `disabledMcpServers: ['inherited-name']` as trusted host policy. `forSession()` preserves
 that policy and copies only the ACP cwd, explicit servers and resume id. Other inherited servers remain available.
@@ -85,6 +86,53 @@ configuration. The same config disables shell snapshots and preserves effective 
 those variables from model-run commands. Conflicting shell `set` assignments and malformed or mixed filter policies
 refuse startup. This protects against an inherited bearer selector overriding an explicit session token. It is not
 an operating-system credential vault: trusted native providers and code with the same user's access remain in the boundary.
+
+## App or tenant API keys
+
+A system uses subscriptions or API keys. Choose this as trusted app/tenant configuration, independently of what an
+ACP client sends. Omit `credentials` (or use `new ProviderCredentials()`) for the existing subscription behavior.
+Both driver option classes accept the same credential object:
+
+```php
+use Prism\Acp\Credentials\ProviderCredentials;
+use Prism\Acp\Codex\CodexDriverOptions;
+
+$base = new CodexDriverOptions(
+    cwd: 'C:/Projects/my-app',
+    credentials: new ProviderCredentials(
+        mode: 'apiKey',
+        apiKey: $tenantOpenAiKey,
+        home: 'C:/AppState/tenant-42/codex',
+    ),
+);
+```
+
+For Claude, pass the same object to `ClaudeDriverOptions` with the tenant's Anthropic key and its own Claude home.
+`forSession()` preserves credentials and host policy; `session/new`, `session/load` and model output cannot replace
+them. The shipped CLI has no key arguments. No environment variable in the PHP application is changed.
+
+Keys must be non-empty and contain no ASCII control characters; the adapter imposes no prefix or length format.
+The home must be an absolute app/tenant path, separate from the user's default or moved subscription home, including
+case and filesystem aliases. A new home is restricted to the current user before launch; an existing home is accepted
+with the application's chosen permissions. Use the same home to resume its sessions. Separate homes have separate
+native settings, MCP servers, skills and history.
+
+Claude receives the explicit key through `ANTHROPIC_API_KEY` and its home through `CLAUDE_CONFIG_DIR`. Codex receives
+only `CODEX_HOME` in its environment, then the key through `account/login/start`; the adapter requires an API-key
+acknowledgment before any thread starts or resumes. Refusal does not fall back to a subscription. Alternate-case
+inherited home variables are replaced, and other inherited subscription-overriding credentials remain withheld.
+Keys are absent from argv, default credential-object JSON/debug output and login diagnostics. The explicit Claude
+key is redacted from stderr callbacks/storage across chunk boundaries, preserving other diagnostic text and withholding
+a dangling key prefix at stream end. This follows the published TS0.25.1 fix for G-116; subscription diagnostics remain
+unchanged. Native Codex stores
+the key in `auth.json` inside that home; the native provider and code running as the same OS user can access it.
+
+The optional source-checkout command `php tools/native/credentials.php CODEX_EXE CLAUDE_EXE [INSTALLED_AUTOLOAD]`
+uses dummy keys and owned temporary homes with no model inference. It confirms native Codex account/key persistence
+and Claude's [authentication status and selected configuration directory](https://code.claude.com/docs/en/cli-reference),
+preserved subscription sentinels and verified process cleanup. Measured versions are Codex0.163.0 and Claude2.1.308.
+Claude's read-only status command runs inside the driver's Job Object through a fixture relay that inherits its exact
+child environment. The script leaves its dummy fixture root for explicit cleanup by the invoking gate.
 
 ## Process ownership and environment
 
@@ -100,7 +148,7 @@ Temporary approval/MCP files have restricted permissions. The package emits no t
 
 ## Verification and limits
 
-Tests compare the PHP mapper's bytes against published `@particle-academy/prism-acp` 0.25.0, using real Claude capture
+Tests compare the PHP mapper's bytes against published `@particle-academy/prism-acp` 0.25.1, using real Claude capture
 fixtures from its corresponding source commit, hostile mutations and 648 reader cases. Agent scenarios compare
 requests, permissions and failures against that reference. CI regenerates these expectations and fails on drift.
 Codex scenarios exercise the published driver's actual state machine through synthetic protocol frames, including
