@@ -10,7 +10,7 @@ automatic service-provider discovery and an artisan command are not included. Th
 ## Install
 
 ```sh
-composer require particle-academy/prism-acp:0.1.0-alpha.1
+composer require particle-academy/prism-acp:0.1.0-alpha.2
 ```
 
 Requires PHP 8.2 or newer, `ext-ctype`, `ext-json`, `ext-mbstring`, Windows with the .NET Framework 4 C# compiler, and an installed,

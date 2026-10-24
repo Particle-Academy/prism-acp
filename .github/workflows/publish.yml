@@ -1,0 +1,161 @@
+name: Publish
+
+# Named `publish.yml`, the name every package in the estate publishes from, so
+# `gh run list --workflow=publish.yml` finds the publish run in any repo.
+#
+# A release is a tag push, and nothing else. Composer resolves versions from git
+# tags and Packagist mirrors them over a webhook, so pushing the tag IS the
+# publish. What this adds: proof the tagged commit was tested, notes that declare
+# their breaking status, a version constant that agrees with the tag, and proof
+# the package really became installable.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Guard the tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Fetch the third-party allowlist
+        uses: actions/checkout@v4
+        with:
+          repository: Particle-Academy/.github
+          path: .third-party-allowlist
+          persist-credentials: false
+
+      - name: Third-party dependency allowlist
+        run: |
+          node .third-party-allowlist/third-party/check.mjs --repo .
+          node -e "require('node:fs').rmSync('.third-party-allowlist',{recursive:true,force:true})"
+
+      # "Did anything fail?" misses a commit whose tests never ran. Ask for a
+      # SUCCESSFUL CI run on this exact commit, then separately for failures.
+      - name: CI must have SUCCEEDED for this exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?head_sha=${GITHUB_SHA}&status=success" --jq '.total_count')"
+          echo "Successful CI runs for ${GITHUB_SHA}: ${count}"
+          if [ "${count}" -lt 1 ]; then
+            echo "::error::No successful CI run for ${GITHUB_SHA}. Push the commit to main and wait for CI before tagging."
+            exit 1
+          fi
+
+      - name: No other gate may have failed on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          failed="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}&status=completed" --jq '[.workflow_runs[] | select(.conclusion == "failure" or .conclusion == "timed_out") | .name] | unique | join(", ")')"
+          if [ -n "${failed}" ]; then
+            echo "::error::These workflows failed on ${GITHUB_SHA}: ${failed}"
+            exit 1
+          fi
+          echo "No failing workflows on ${GITHUB_SHA}."
+
+      # Composer takes the version from the tag; a `version` key would let the
+      # two disagree. Version::VERSION is what `prism-acp --version` and the
+      # agent report, so it must name the tag being published.
+      - name: Versions must agree with the tag
+        run: |
+          if grep -Eq '^[[:space:]]*"version"[[:space:]]*:' composer.json; then
+            echo "::error::composer.json declares a version. Composer takes the version from the tag; remove the key."
+            exit 1
+          fi
+          declared="$(php -r 'require "src/Version.php"; echo Prism\Acp\Version::VERSION;')"
+          if [ "v${declared}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::src/Version.php says ${declared}, the tag is ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+          if ! grep -qx "## ${declared}" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## ${declared}' section."
+            exit 1
+          fi
+
+      # The annotation is read from the API: actions/checkout creates a
+      # LIGHTWEIGHT local tag, so reading it locally yields the commit message.
+      # This can only withhold the GitHub release; Packagist already has the
+      # version. Run tools/check-release-notes.sh --tag <tag> BEFORE pushing.
+      - name: Release notes must declare their breaking status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG_TYPE="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}" --jq '.object.type')"
+          if [ "${TAG_TYPE}" != "tag" ]; then
+            echo "::error::${GITHUB_REF_NAME} is a lightweight tag, so it carries no notes. Tag with 'git tag -a'."
+            exit 1
+          fi
+          TAG_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}" --jq '.object.sha')"
+          gh api "repos/${GITHUB_REPOSITORY}/git/tags/${TAG_SHA}" --jq '.message' > "${RUNNER_TEMP}/release-notes.md"
+          sh tools/check-release-notes.sh "${RUNNER_TEMP}/release-notes.md"
+
+  release:
+    name: Create the GitHub release
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Never --generate-notes or --notes-from-tag: both silently publish
+      # something other than the annotation. The API holds the real one.
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} already exists; leaving it alone."
+            exit 0
+          fi
+          TAG_SHA="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${GITHUB_REF_NAME}" --jq '.object.sha')"
+          gh api "repos/${GITHUB_REPOSITORY}/git/tags/${TAG_SHA}" --jq '.message' > "${RUNNER_TEMP}/release-notes.md"
+          if [ ! -s "${RUNNER_TEMP}/release-notes.md" ]; then
+            echo "::error::${GITHUB_REF_NAME} has an empty annotation."
+            exit 1
+          fi
+          prerelease=""
+          case "${GITHUB_REF_NAME}" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file "${RUNNER_TEMP}/release-notes.md" --verify-tag ${prerelease}
+
+  distribution:
+    name: Verify it is installable
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # A tag is not a distribution. Packagist mirrors over a webhook, so poll.
+      - name: Packagist must serve this version
+        run: |
+          pkg="$(php -r 'echo json_decode(file_get_contents("composer.json"), true)["name"];')"
+          want="${GITHUB_REF_NAME}"
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            body="$(curl -fsS "https://repo.packagist.org/p2/${pkg}~dev.json" 2>/dev/null; curl -fsS "https://repo.packagist.org/p2/${pkg}.json" 2>/dev/null || true)"
+            if printf '%s' "${body}" | grep -q "\"version\":\"${want}\""; then
+              echo "${pkg} ${want} is installable."
+              exit 0
+            fi
+            echo "  attempt ${attempt}: ${want} not on Packagist yet."
+            sleep 30
+          done
+          echo "::error::${pkg} ${want} never appeared on Packagist. Check the GitHub webhook."
+          exit 1
