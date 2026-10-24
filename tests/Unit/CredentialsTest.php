@@ -32,7 +32,9 @@ it('creates a nested app home privately, accepts existing homes and imposes no k
     $home = $root.DIRECTORY_SEPARATOR.'tenant'.DIRECTORY_SEPARATOR.'provider';
     try {
         $checked = ApiKeyHome::check('claude', new ProviderCredentials('apiKey', 'arbitrary dummy token', $home), []);
-        expect($checked->home)->toBe(realpath($home))->and($checked->key())->toBe('arbitrary dummy token')
+        // The returned home preserves the normalized input, including Windows 8.3 spellings.
+        // Canonical identity is used for subscription-home refusal, not for rewriting the app's path.
+        expect($checked->home)->toBe($home)->and($checked->key())->toBe('arbitrary dummy token')
             ->and(ApiKeyHome::check('claude', new ProviderCredentials('apiKey', 'replacement dummy', $home), [])->home)->toBe($checked->home);
         if (PHP_OS_FAMILY !== 'Windows') {
             expect(fileperms($home) & 0777)->toBe(0700);
