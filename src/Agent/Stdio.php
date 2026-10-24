@@ -71,7 +71,8 @@ final class Stdio
         }
         self::$inputRelay ??= WindowsProviderProcess::launch(
             PHP_BINARY,
-            [dirname(__DIR__, 2).'/resources/stdin-relay.php'],
+            // Relay stdout becomes the client's ACP input. Host php.ini diagnostics must never enter it.
+            ['-d', 'display_errors=stderr', '-d', 'log_errors=0', dirname(__DIR__, 2).'/resources/stdin-relay.php'],
             getcwd() ?: sys_get_temp_dir(),
             ChildEnv::build(getenv())->env,
             STDIN,

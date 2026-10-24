@@ -2,6 +2,80 @@
 
 declare(strict_types=1);
 
+it('keeps Windows client input byte-exact when the relay emits a PHP notice while reading', function () {
+    $directory = sys_get_temp_dir().'/prism-acp-relay-diagnostics-'.bin2hex(random_bytes(6));
+    mkdir($directory.'/src/Agent', 0777, true);
+    mkdir($directory.'/resources');
+    $root = dirname(__DIR__, 2);
+    copy($root.'/src/Agent/Stdio.php', $directory.'/src/Agent/Stdio.php');
+    // Inject only a stream filter beside the unchanged production launcher. The real shipped relay does the
+    // reads: a deterministic notice from its fread reaches PHP's normal error display/logging machinery.
+    $instrumented = <<<'PHP'
+<?php
+error_reporting(E_ALL);
+class RelayDiagnosticFilter extends php_user_filter
+{
+    private bool $reported = false;
+
+    public function filter($in, $out, &$consumed, bool $closing): int
+    {
+        while ($bucket = stream_bucket_make_writeable($in)) {
+            if (! $this->reported) {
+                $this->reported = true;
+                trigger_error('prism-acp-relay-notice-control', E_USER_NOTICE);
+            }
+            $consumed += $bucket->datalen;
+            stream_bucket_append($out, $bucket);
+        }
+
+        return PSFS_PASS_ON;
+    }
+}
+stream_filter_register('prism-acp.notice', RelayDiagnosticFilter::class);
+stream_filter_append(STDIN, 'prism-acp.notice', STREAM_FILTER_READ);
+require __SHIPPED_RELAY__;
+PHP;
+    file_put_contents($directory.'/resources/stdin-relay.php',
+        str_replace('__SHIPPED_RELAY__', var_export($root.'/resources/stdin-relay.php', true), $instrumented));
+    $input = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\"}\r\n"
+        .json_encode(['jsonrpc' => '2.0', 'method' => 'session/prompt', 'params' => ['text' => str_repeat('日本語🙂', 12000)]], JSON_UNESCAPED_UNICODE)."\n";
+    file_put_contents($directory.'/input.ndjson', $input);
+    $process = null;
+    $pipes = [];
+    try {
+        $process = proc_open([PHP_BINARY, dirname(__DIR__).'/fixtures/stdin-relay-diagnostics-host.php', $directory],
+            [0 => ['file', $directory.'/input.ndjson', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes,
+            null, null, ['bypass_shell' => true]);
+        expect(is_resource($process))->toBeTrue();
+        $output = stream_get_contents($pipes[1]);
+        $diagnostics = (string) stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $pipes = [];
+        $exit = proc_close($process);
+        $process = null;
+
+        expect($output)->toBe($input)
+            ->and($diagnostics)->toContain('prism-acp-relay-notice-control')
+            ->and(substr_count($diagnostics, 'prism-acp-relay-notice-control'))->toBe(1)
+            ->and($exit)->toBe(0);
+    } finally {
+        foreach ($pipes as $pipe) {
+            fclose($pipe);
+        }
+        if (is_resource($process)) {
+            proc_terminate($process);
+            proc_close($process);
+        }
+        foreach (['src/Agent/Stdio.php', 'resources/stdin-relay.php', 'input.ndjson'] as $file) {
+            @unlink($directory.'/'.$file);
+        }
+        foreach (['src/Agent', 'src', 'resources', ''] as $folder) {
+            @rmdir($directory.'/'.$folder);
+        }
+    }
+})->skip(PHP_OS_FAMILY !== 'Windows', 'the Windows stdin relay');
+
 /** @return list<int> */
 function relayDescendants(int $hostPid): array
 {
