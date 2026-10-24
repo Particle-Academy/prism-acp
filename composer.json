@@ -1,23 +1,25 @@
 {
     "name": "particle-academy/prism-acp",
-    "description": "Speak the Agent Client Protocol to a coding-agent CLI the user has already signed in to. No API key, no third-party adapter. Laravel-compatible, not Laravel-reliant.",
+    "description": "Agent Client Protocol for the signed-in Claude CLI from PHP. Initial Windows preview, with no third-party runtime dependencies.",
     "type": "library",
     "license": "MIT",
-    "keywords": ["acp", "agent-client-protocol", "claude", "codex", "prism", "laravel"],
+    "keywords": ["acp", "agent-client-protocol", "claude", "prism"],
+    "homepage": "https://github.com/Particle-Academy/prism-acp",
+    "support": {
+        "issues": "https://github.com/Particle-Academy/prism-acp/issues",
+        "source": "https://github.com/Particle-Academy/prism-acp"
+    },
     "require": {
         "php": "^8.2",
+        "ext-ctype": "*",
         "ext-json": "*",
         "ext-mbstring": "*"
     },
     "require-dev": {
         "laravel/pint": "^1.30",
         "pestphp/pest": "^3.0|^4.0",
-        "phpstan/phpstan": "^2.0"
-    },
-    "suggest": {
-        "ext-pcntl": "Required on Linux: the process-tree supervisor forks the provider into its own session.",
-        "ext-posix": "Required on Linux: the process-tree supervisor uses setsid and signals the provider's tree.",
-        "laravel/framework": "Optional: Prism\\Acp\\Laravel\\PrismAcpServiceProvider binds the drivers and config. The core never needs it."
+        "phpstan/phpstan": "^2.0",
+        "rector/rector": "^2.7"
     },
     "autoload": {
         "psr-4": {
@@ -29,10 +31,12 @@
             "Tests\\": "tests/"
         }
     },
+    "bin": ["bin/prism-acp"],
     "scripts": {
         "test": "@php vendor/bin/pest",
         "types": "@php vendor/bin/phpstan analyse",
-        "format": "@php vendor/bin/pint"
+        "format": "@php vendor/bin/pint",
+        "rector": "@php vendor/bin/rector process --dry-run"
     },
     "config": {
         "sort-packages": true,

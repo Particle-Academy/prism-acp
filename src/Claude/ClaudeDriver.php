@@ -571,7 +571,7 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         $problems = [];
         foreach ($accepted as $frame) {
             if (! $frame->ok) {
-                $problems[] = $frame->error === null ? 'NDJSON frame could not be read' : $frame->error->message;
+                $problems[] = $frame->error->message ?? 'NDJSON frame could not be read';
 
                 continue;
             }

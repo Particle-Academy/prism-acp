@@ -16,7 +16,7 @@ use Prism\Acp\Support\Js;
  * - One malformed window refuses the whole payload, so a bad `five_hour` never quietly shows `seven_day` in its place.
  * - `raw` carries the provider's object verbatim, so a field the provider adds is never dropped.
  */
-final class ClaudeRateLimit implements \JsonSerializable
+final readonly class ClaudeRateLimit implements \JsonSerializable
 {
     /**
      * A reset past JavaScript's last date (8.64e15 ms) is refused like any other malformed field. The reference accepted
@@ -26,14 +26,14 @@ final class ClaudeRateLimit implements \JsonSerializable
 
     /** @param array<string, array{utilization: int|float, resetsAtMs: int|float}> $windows */
     public function __construct(
-        public readonly string $status,
-        public readonly int|float $resetsAtMs,
-        public readonly string $rateLimitType,
-        public readonly ?string $overageStatus,
-        public readonly ?string $overageDisabledReason,
-        public readonly ?bool $isUsingOverage,
-        public readonly array $windows,
-        public readonly \stdClass $raw,
+        public string $status,
+        public int|float $resetsAtMs,
+        public string $rateLimitType,
+        public ?string $overageStatus,
+        public ?string $overageDisabledReason,
+        public ?bool $isUsingOverage,
+        public array $windows,
+        public \stdClass $raw,
     ) {}
 
     /** The value, or null when the payload is refused. */

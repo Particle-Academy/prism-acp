@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 9 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests (${{ matrix.os }}, PHP ${{ matrix.php }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        php: ['8.2', '8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Fetch org dependency policy
+        uses: actions/checkout@v4
+        with:
+          repository: Particle-Academy/.github
+          path: .third-party-allowlist
+          persist-credentials: false
+      - name: Check org dependency policy before install
+        run: node .third-party-allowlist/third-party/check.mjs --repo .
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: mbstring
+          coverage: none
+          tools: composer:v2
+      - name: Resolve current compatible dependencies
+        run: composer update --prefer-dist --no-interaction --no-progress
+      - run: composer validate --strict
+      - run: composer audit
+      - run: composer test -- --compact
+      - name: Consumer installation without development dependencies
+        shell: bash
+        run: |
+          export ACP_CONSUMER_DIR="${RUNNER_TEMP}/acp-consumer"
+          mkdir -p "$ACP_CONSUMER_DIR"
+          php -r '$root = str_replace("\\", "/", getcwd()); file_put_contents(getenv("ACP_CONSUMER_DIR")."/composer.json", json_encode(["require" => ["particle-academy/prism-acp" => "*@dev"], "repositories" => [["type" => "path", "url" => $root, "options" => ["symlink" => false]]], "config" => ["allow-plugins" => false]], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES));'
+          composer install --working-dir="$ACP_CONSUMER_DIR" --no-dev --no-scripts --no-plugins --prefer-dist --no-interaction
+          php scripts/consumer-smoke.php "$ACP_CONSUMER_DIR/vendor/autoload.php"
+
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Fetch org dependency policy
+        uses: actions/checkout@v4
+        with:
+          repository: Particle-Academy/.github
+          path: .third-party-allowlist
+          persist-credentials: false
+      - name: Check org dependency policy before install
+        run: node .third-party-allowlist/third-party/check.mjs --repo .
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring
+          coverage: none
+          tools: composer:v2, composer-require-checker:4.17.0
+      - run: composer update --prefer-dist --no-interaction --no-progress
+      - run: composer types
+      - run: php vendor/bin/pint --test
+      - run: composer rector
+      - run: composer-require-checker check composer.json
+      - run: php -l bin/prism-acp
+      - run: php bin/prism-acp --version
+      - run: git diff --exit-code
+
+  reference:
+    name: Published TypeScript reference
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Fetch fixtures at the published reference's source
+        uses: actions/checkout@v4
+        with:
+          repository: Particle-Academy/prism-acp-ts
+          ref: 0a4a8a2a12877627b798f76c41df7f45294307ac
+          path: .reference-source
+          persist-credentials: false
+      - name: Fetch org dependency policy
+        uses: actions/checkout@v4
+        with:
+          repository: Particle-Academy/.github
+          path: .third-party-allowlist
+          persist-credentials: false
+      - name: Check org dependency policy before install
+        run: node .third-party-allowlist/third-party/check.mjs --repo .
+      - name: Install published reference without lifecycle scripts
+        run: npm install --prefix .reference-runtime --ignore-scripts --no-audit --no-fund --no-package-lock @particle-academy/prism-acp@0.24.1
+      - name: Regenerate expectations using the actual published code
+        run: |
+          node tools/golden/claude-to-acp.mjs .reference-runtime/node_modules/@particle-academy/prism-acp .reference-source/test/fixtures
+          node tools/golden/units.mjs .reference-runtime/node_modules/@particle-academy/prism-acp
+          node tools/golden/agent.mjs .reference-runtime/node_modules/@particle-academy/prism-acp
+          git diff --exit-code -- tests/fixtures
+          test -z "$(git ls-files --others --exclude-standard -- tests/fixtures)"
+      - name: Report newer reference releases
+        run: node scripts/reference-currency.mjs

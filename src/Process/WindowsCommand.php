@@ -59,7 +59,7 @@ final class WindowsCommand
     public static function resolve(string $command, array $env): array
     {
         $extensions = array_values(array_filter(array_map(
-            'strtolower', explode(';', self::lookup($env, 'pathext') ?? '.COM;.EXE;.BAT;.CMD'),
+            strtolower(...), explode(';', self::lookup($env, 'pathext') ?? '.COM;.EXE;.BAT;.CMD'),
         ), fn (string $e) => $e !== ''));
         $hasPath = preg_match('#[\\\\/:]#', $command) === 1;
         if ($hasPath && ! self::isAbsolute($command)) {

@@ -1,0 +1,61 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Prism\Acp\Agent\AcpAgent;
+use Prism\Acp\Agent\DriverEvents;
+use Prism\Acp\Agent\Stdio;
+use Prism\Acp\Claude\ClaudeDriver;
+use Prism\Acp\Claude\ClaudeDriverOptions;
+use Prism\Acp\JsonRpc\JsonRpcPeer;
+use Prism\Acp\Meta;
+use Prism\Acp\Process\WindowsCommand;
+use Prism\Acp\Version;
+
+require $_composer_autoload_path ?? dirname(__DIR__).'/vendor/autoload.php';
+
+try {
+    $options = [];
+    foreach (array_slice($argv, 1) as $argument) {
+        if ($argument === '--help' || $argument === '-h') {
+            fwrite(STDOUT, "Prism ACP: Claude on Windows (preview)\nUsage: prism-acp [--cwd=ABSOLUTE_PATH] [--model=MODEL] [--claude-binary=ABSOLUTE_PATH]\nTools request permission through the ACP client. Codex, Linux and macOS are not supported in this release.\n");
+            exit(0);
+        }
+        if ($argument === '--version') {
+            fwrite(STDOUT, Version::VERSION."\n");
+            exit(0);
+        }
+        if (preg_match('/\A--(cwd|model|claude-binary)=(.+)\z/s', $argument, $match) !== 1 || isset($options[$match[1]])) {
+            throw new InvalidArgumentException('unknown, empty or repeated option; use --help');
+        }
+        $options[$match[1]] = $match[2];
+    }
+    if (PHP_OS_FAMILY !== 'Windows') {
+        throw new \Prism\Acp\Process\ContainmentUnavailable('this preview supports Windows Job Objects only');
+    }
+    if (isset($options['cwd']) && ! WindowsCommand::isAbsolute($options['cwd'])) {
+        throw new InvalidArgumentException('the working directory must be absolute');
+    }
+    $cwd = realpath($options['cwd'] ?? (getcwd() ?: '.'));
+    if ($cwd === false || ! is_dir($cwd)) {
+        throw new InvalidArgumentException('the working directory does not exist');
+    }
+    $base = new ClaudeDriverOptions(
+        cwd: $cwd,
+        binary: $options['claude-binary'] ?? 'claude',
+        model: isset($options['model']) ? Meta::assertModel($options['model']) : null,
+        // Every CLI tool goes through the ACP permission round trip. Unknown/new tools cannot bypass the matcher.
+        permissionPrompts: ['*'],
+    );
+    $served = Stdio::serve(Stdio::stdin(), STDOUT, fn (JsonRpcPeer $peer) => new AcpAgent(
+        peer: $peer,
+        driverFactory: fn (array $session, DriverEvents $events) => new ClaudeDriver($base->forSession($session), $events),
+        driverCapabilities: [...ClaudeDriver::CAPABILITIES, 'permissionRequests' => true],
+    ));
+    $served['closed']->await();
+} catch (Throwable $error) {
+    // Do not print paths, provider payloads or credential-bearing exceptions on this protocol transport.
+    fwrite(STDERR, "Prism ACP could not start or continue. Check supported platform, CLI installation and options (--help).\n");
+    exit(1);
+}

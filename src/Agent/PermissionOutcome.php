@@ -9,13 +9,13 @@ namespace Prism\Acp\Agent;
  * default text: for a decision that is not the person's (a limit the client enforces, an allow it made without
  * asking). It never changes the decision. An empty string counts as absent.
  */
-final class PermissionOutcome
+final readonly class PermissionOutcome
 {
     private function __construct(
         /** 'selected' or 'cancelled' */
-        public readonly string $outcome,
-        public readonly ?string $optionId,
-        public readonly ?string $reason,
+        public string $outcome,
+        public ?string $optionId,
+        public ?string $reason,
     ) {}
 
     public static function selected(string $optionId, ?string $reason = null): self

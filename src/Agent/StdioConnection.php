@@ -57,7 +57,7 @@ final class StdioConnection
     {
         foreach ($frames as $frame) {
             if (! $frame->ok) {
-                $this->onProtocolError?->__invoke($frame->error === null ? 'NDJSON frame could not be read' : $frame->error->message);
+                $this->onProtocolError?->__invoke($frame->error->message ?? 'NDJSON frame could not be read');
 
                 continue;
             }

@@ -261,7 +261,7 @@ static class Supervisor
         int disposing, faulted;
         public bool Faulted { get { return Interlocked.CompareExchange(ref faulted, 0, 0) != 0; } }
 
-        public TcpStdio(int port, string token, ManualResetEvent failed)
+        public TcpStdio(int port, string token, ManualResetEvent failed, bool inheritInput)
         {
             this.failed = failed;
             try
@@ -274,6 +274,15 @@ static class Supervisor
                     if (!SameTokenLine(new TcpLines(stream, false).ReadLine(MaxAuthLine, false), "auth " + token + " " + i)) throw new FormatException();
                     stream.ReadTimeout = Timeout.Infinite;
                     stream.WriteTimeout = Timeout.Infinite;
+
+                    // Only the host's owned stdin relay opts in. It must read the client's real pipe while still
+                    // entering the Job Object suspended, so a blocked read cannot survive its host's death.
+                    if (i == 0 && inheritInput)
+                    {
+                        Child[0] = GetStdHandle(-10);
+                        if (Child[0] == IntPtr.Zero || Child[0] == new IntPtr(-1)) throw new IOException();
+                        continue;
+                    }
 
                     var attributes = new SecurityAttributes();
                     attributes.length = Marshal.SizeOf(typeof(SecurityAttributes)); attributes.inherit = 1;
@@ -329,7 +338,7 @@ static class Supervisor
         public void Start()
         {
             CloseChildEnds();
-            foreach (var pump in pumps) pump.Start();
+            foreach (var pump in pumps) if (pump != null) pump.Start();
         }
 
         public bool DrainOutputs()
@@ -358,7 +367,7 @@ static class Supervisor
         }
     }
 
-    static int RunTcp(string channel, string token)
+    static int RunTcp(string channel, string token, bool inheritInput)
     {
         const string prefix = "tcp://127.0.0.1:";
         int port;
@@ -395,7 +404,7 @@ static class Supervisor
                 if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, ref limit, Marshal.SizeOf(typeof(ExtendedLimit))))
                 { Say("failed " + Marshal.GetLastWin32Error()); return 126; }
 
-                bridge = new TcpStdio(port, token, killed);
+                bridge = new TcpStdio(port, token, killed, inheritInput);
                 var startup = new StartupInfo(); startup.cb = Marshal.SizeOf(typeof(StartupInfo));
                 startup.dwFlags = STARTF_USESTDHANDLES;
                 startup.hStdInput = bridge.Child[0]; startup.hStdOutput = bridge.Child[1]; startup.hStdError = bridge.Child[2];
@@ -447,13 +456,15 @@ static class Supervisor
     {
         string channel = Environment.GetEnvironmentVariable("PRISM_ACP_TREE_CHANNEL");
         string token = Environment.GetEnvironmentVariable("PRISM_ACP_TREE_TOKEN");
+        bool inheritInput = Environment.GetEnvironmentVariable("PRISM_ACP_TREE_INHERIT_STDIN") == "1";
         // Never inherited by the provider.
         Environment.SetEnvironmentVariable("PRISM_ACP_TREE_CHANNEL", null);
         Environment.SetEnvironmentVariable("PRISM_ACP_TREE_TOKEN", null);
+        Environment.SetEnvironmentVariable("PRISM_ACP_TREE_INHERIT_STDIN", null);
         if (string.IsNullOrEmpty(channel) || string.IsNullOrEmpty(token)) return 125;
         if (channel.StartsWith("tcp://", StringComparison.Ordinal))
         {
-            try { return RunTcp(channel, token); } catch { return 125; }
+            try { return RunTcp(channel, token, inheritInput); } catch { return 125; }
         }
         const string prefix = @"\\.\pipe\";
         if (!channel.StartsWith(prefix)) return 125;

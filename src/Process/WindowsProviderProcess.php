@@ -69,8 +69,9 @@ final class WindowsProviderProcess implements ProviderProcess
      *
      * @param  list<string>  $args
      * @param  array<string, string>  $env  the provider's environment (build it with ChildEnv)
+     * @param  resource|null  $inheritedInput  host stdin for the owned stdio relay, otherwise a new pipe
      */
-    public static function launch(string $command, array $args, string $cwd, array $env): self
+    public static function launch(string $command, array $args, string $cwd, array $env, mixed $inheritedInput = null): self
     {
         $resolved = WindowsCommand::resolve($command, $env);
         $commandLine = WindowsCommand::commandLine([$resolved['application'], ...$resolved['args'], ...$args]);
@@ -90,9 +91,10 @@ final class WindowsProviderProcess implements ProviderProcess
 
         $supervisor = proc_open([$executable],
             // The supervisor creates the provider with handle inheritance on, so it holds none of ours.
-            [0 => ['file', 'NUL', 'r'], 1 => ['file', 'NUL', 'w'], 2 => ['file', 'NUL', 'w']],
+            [0 => $inheritedInput ?? ['file', 'NUL', 'r'], 1 => ['file', 'NUL', 'w'], 2 => ['file', 'NUL', 'w']],
             $pipes, $directory,
-            [...$env, 'PRISM_ACP_TREE_CHANNEL' => "tcp://127.0.0.1:{$port}", 'PRISM_ACP_TREE_TOKEN' => $token],
+            [...$env, 'PRISM_ACP_TREE_CHANNEL' => "tcp://127.0.0.1:{$port}", 'PRISM_ACP_TREE_TOKEN' => $token,
+                'PRISM_ACP_TREE_INHERIT_STDIN' => $inheritedInput === null ? '0' : '1'],
             ['bypass_shell' => true]);
         if (! is_resource($supervisor)) {
             fclose($server);
@@ -142,6 +144,12 @@ final class WindowsProviderProcess implements ProviderProcess
     public function tree(): ProcessTree
     {
         return $this->tree;
+    }
+
+    /** @return resource the selectable stdout stream, used by the owned stdin relay */
+    public function output(): mixed
+    {
+        return $this->stdout;
     }
 
     public function write(string $bytes): void

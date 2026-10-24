@@ -5,17 +5,17 @@ declare(strict_types=1);
 namespace Prism\Acp\Process;
 
 /** What stop() found. The same shape as the reference's StopVerdict. */
-final class StopVerdict
+final readonly class StopVerdict
 {
     public function __construct(
         /** The provider exited on its own, before the tree was terminated. */
-        public readonly bool $graceful,
+        public bool $graceful,
         /** No process of the tree is left. */
-        public readonly bool $empty,
+        public bool $empty,
         /** Processes the supervisor still counted after terminating the tree; null when it could not count. */
-        public readonly ?int $survivors,
+        public ?int $survivors,
         /** The supervisor confirmed the count itself. False when it ended without reporting. */
-        public readonly bool $verified,
+        public bool $verified,
     ) {}
 
     /** @return array{graceful: bool, empty: bool, survivors: int|null, verified: bool} */

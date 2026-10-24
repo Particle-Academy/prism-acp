@@ -20,6 +20,6 @@ final class Provider
             return WindowsProviderProcess::launch($command, $args, $cwd, $env);
         }
 
-        throw new ProcessTreeException('cannot contain the provider: this platform has no process-tree containment in this package yet');
+        throw new ContainmentUnavailable('cannot contain the provider: this release supports Windows Job Objects only');
     }
 }

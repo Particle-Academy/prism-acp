@@ -77,7 +77,7 @@ final class Approvals
         if ($tools === []) {
             throw new \InvalidArgumentException('permission prompts need at least one tool name');
         }
-        foreach ($tools as $tool) {
+        foreach ($tools === ['*'] ? [] : $tools as $tool) {
             // A tool name that could widen the hook's matcher (a regular expression) is refused.
             if (preg_match('/\A[A-Za-z][A-Za-z0-9_]*\z/', $tool) !== 1) {
                 throw new \InvalidArgumentException('refusing tool name '.json_encode($tool).': a tool name is a single identifier');
@@ -85,7 +85,9 @@ final class Approvals
         }
 
         return ['hooks' => ['PreToolUse' => [[
-            'matcher' => implode('|', $tools),
+            // Claude's empty matcher matches every tool, including tools introduced after this release.
+            // Only this explicit sentinel selects it; tool names can never inject a regular expression.
+            'matcher' => $tools === ['*'] ? '' : implode('|', $tools),
             'hooks' => [['type' => 'command', 'command' => "\"{$phpBinary}\" \"{$hookPath}\"", 'timeout' => self::WAIT_SECONDS, 'onFailure' => 'block']],
         ]]]];
     }

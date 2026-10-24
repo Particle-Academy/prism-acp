@@ -111,7 +111,7 @@ while (($line = fgets(STDIN)) !== false) {
         $settings = json_decode((string) file_get_contents((string) $option('--settings')), true);
         $hook = $settings['hooks']['PreToolUse'][0] ?? null;
         $tool = substr($said, 5);
-        if ($hook === null || preg_match('/^(?:'.$hook['matcher'].')$/', $tool) !== 1) {
+        if ($hook === null || ($hook['matcher'] !== '' && preg_match('/^(?:'.$hook['matcher'].')$/', $tool) !== 1)) {
             $text($turn, "no hook for {$tool}");
             $result();
 

@@ -11,7 +11,7 @@ use Prism\Acp\Support\Js;
  * answers with (`_meta[particle.academy/turn_failure]`). A client holding a turn "until the limit resets" needs to know
  * the turn failed ON the limit, not infer it from a rate-limit event that happened to arrive in the same turn.
  */
-final class TurnFailure implements \JsonSerializable
+final readonly class TurnFailure implements \JsonSerializable
 {
     /**
      * Claude Code's assistant `error` values (claude-code 2.1.301). An unknown value is `other`, never dropped: the
@@ -38,11 +38,11 @@ final class TurnFailure implements \JsonSerializable
 
     public function __construct(
         /** The provider's own reason, verbatim. */
-        public readonly string $reason,
+        public string $reason,
         /** 'rate_limit' | 'overloaded' | 'auth' | 'billing' | 'other' */
-        public readonly string $kind,
+        public string $kind,
         /** When the limit resets, in epoch milliseconds, ONLY when a rate-limit event in the same turn said so. */
-        public readonly int|float|null $resetsAtMs = null,
+        public int|float|null $resetsAtMs = null,
     ) {}
 
     /** A failed Codex turn's `error` (TurnError), as a failure; null when it names no reason. */

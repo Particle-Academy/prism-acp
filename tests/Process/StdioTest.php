@@ -23,9 +23,10 @@ final class AcpClientProcess
     /** @var list<mixed> */
     public array $notifications = [];
 
-    public function __construct(string $cwd)
+    /** @param list<string>|null $command */
+    public function __construct(string $cwd, ?array $command = null, private readonly ?Closure $permission = null)
     {
-        $process = proc_open([PHP_BINARY, dirname(__DIR__).'/fixtures/agent-host.php'],
+        $process = proc_open($command ?? [PHP_BINARY, dirname(__DIR__).'/fixtures/agent-host.php'],
             [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['file', $cwd.DIRECTORY_SEPARATOR.'host.err', 'w']], $pipes, $cwd);
         if (! is_resource($process)) {
             throw new RuntimeException('the agent host did not start');
@@ -44,6 +45,13 @@ final class AcpClientProcess
             $message = Json::decode($line);
             if (($message->id ?? null) === $id && ! isset($message->method)) {
                 return $message;
+            }
+            if (($message->method ?? null) === 'session/request_permission') {
+                $result = $this->permission === null
+                    ? ['outcome' => ['outcome' => 'cancelled']]
+                    : ($this->permission)($message->params);
+                fwrite($this->pipes[0], Json::encode(['jsonrpc' => '2.0', 'id' => $message->id, 'result' => $result])."\n");
+                fflush($this->pipes[0]);
             }
             $this->notifications[] = $message;
         }
@@ -92,4 +100,45 @@ describe('the agent over stdio', function () {
         expect($client->close())->toBe(0)
             ->and(microtime(true) - $start)->toBeLessThan(10.0);
     });
+
+    it('the shipped CLI asks before every tool and carries deny and allow reasons through the actual hook', function () {
+        $cwd = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-cli-'.bin2hex(random_bytes(4));
+        mkdir($cwd);
+        $fixture = dirname(__DIR__).'/fixtures/fake-claude.php';
+        file_put_contents($cwd.'/fake.cjs', 'const {spawn} = require("node:child_process"); const child = spawn('
+            .json_encode(PHP_BINARY).', ['.json_encode($fixture).', ...process.argv.slice(2)], {stdio:"inherit"}); child.on("error", () => process.exit(1)); child.on("exit", code => process.exit(code ?? 1));');
+        file_put_contents($cwd.'/claude.cmd', '@ECHO off'."\n".'"%_prog%" "%dp0%\\fake.cjs" %*'."\n");
+        $decisions = 0;
+        $client = new AcpClientProcess($cwd,
+            [PHP_BINARY, dirname(__DIR__, 2).'/bin/prism-acp', '--cwd='.$cwd, '--claude-binary='.$cwd.'/claude.cmd'],
+            function (stdClass $request) use (&$decisions): array {
+                $decisions++;
+
+                return ['outcome' => ['outcome' => 'selected', 'optionId' => $decisions === 1 ? 'reject_once' : 'allow_once'],
+                    '_meta' => ['particle.academy/permission_reason' => $decisions === 1 ? 'Denied by the test client' : 'Reviewed by the test client']];
+            });
+        try {
+            $init = $client->request('initialize', ['protocolVersion' => 1, 'clientCapabilities' => new stdClass]);
+            expect($init->result->_meta->{'particle.academy/driver_capabilities'}->permissionRequests)->toBeTrue();
+            $session = $client->request('session/new', ['cwd' => $cwd, 'mcpServers' => []])->result->sessionId;
+            foreach ([['Bash', 'deny', 'Denied'], ['FutureTool', 'allow', 'Reviewed']] as [$tool, $decision, $reason]) {
+                $before = count($client->notifications);
+                $answer = $client->request('session/prompt', ['sessionId' => $session, 'prompt' => [['type' => 'text', 'text' => 'hook '.$tool]]]);
+                $said = '';
+                foreach (array_slice($client->notifications, $before) as $note) {
+                    if (($note->method ?? null) === 'session/update' && ($note->params->update->sessionUpdate ?? null) === 'agent_message_chunk') {
+                        $said .= $note->params->update->content->text;
+                    }
+                }
+                $hook = json_decode($said, true, flags: JSON_THROW_ON_ERROR);
+                expect($answer->result->stopReason)->toBe('end_turn')
+                    ->and($hook['exit'])->toBe(0)
+                    ->and($hook['stdout']['hookSpecificOutput']['permissionDecision'])->toBe($decision)
+                    ->and($hook['stdout']['hookSpecificOutput']['permissionDecisionReason'])->toStartWith($reason);
+            }
+            expect($decisions)->toBe(2);
+        } finally {
+            expect($client->close())->toBe(0);
+        }
+    })->skip(! array_filter(explode(PATH_SEPARATOR, (string) getenv('PATH')), fn (string $path) => is_file(rtrim($path, '\\/').'/node.exe')), 'node for the fake npm CLI');
 })->skip(PHP_OS_FAMILY !== 'Windows', 'containment exists on Windows only so far');

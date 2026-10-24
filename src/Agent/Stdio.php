@@ -6,8 +6,10 @@ namespace Prism\Acp\Agent;
 
 use Prism\Acp\Async\Deferred;
 use Prism\Acp\Async\Loop;
+use Prism\Acp\Env\ChildEnv;
 use Prism\Acp\JsonRpc\JsonRpcPeer;
 use Prism\Acp\Ndjson\NdjsonFramer;
+use Prism\Acp\Process\WindowsProviderProcess;
 
 /**
  * Serve the ACP agent over a pipe: the client spawns the agent and they exchange NDJSON on its stdin and stdout. The
@@ -19,6 +21,9 @@ use Prism\Acp\Ndjson\NdjsonFramer;
  */
 final class Stdio
 {
+    /** Keep the relay's control connection alive for as long as its input stream. */
+    private static ?WindowsProviderProcess $inputRelay = null;
+
     /**
      * @param  resource  $input
      * @param  resource  $output
@@ -54,8 +59,8 @@ final class Stdio
 
     /**
      * This process's stdin, as a stream an event loop can wait on. On Windows, a relay process holds the real stdin
-     * and forwards it over a loopback socket that only it can authenticate to; it exits when stdin ends or the
-     * socket closes. Elsewhere, STDIN itself.
+     * and forwards it through the authenticated supervisor's stdout socket. The relay enters the Job Object before
+     * it runs; the supervisor ends it even if it is blocked reading when the host dies. Elsewhere, STDIN itself.
      *
      * @return resource
      */
@@ -64,44 +69,14 @@ final class Stdio
         if (PHP_OS_FAMILY !== 'Windows') {
             return STDIN;
         }
-        $server = @stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
-        if ($server === false) {
-            throw new \RuntimeException('no loopback listener for the stdin relay');
-        }
-        $address = 'tcp://'.stream_socket_get_name($server, false);
-        $token = bin2hex(random_bytes(32));
-        $relay = proc_open([PHP_BINARY, dirname(__DIR__, 2).'/resources/stdin-relay.php'],
-            [0 => STDIN, 1 => ['file', 'NUL', 'w'], 2 => ['file', 'NUL', 'w']], $pipes, null,
-            [...getenv(), 'PRISM_ACP_RELAY' => $address, 'PRISM_ACP_RELAY_TOKEN' => $token], ['bypass_shell' => true]);
-        if (! is_resource($relay)) {
-            fclose($server);
-            throw new \RuntimeException('the stdin relay could not be started');
-        }
-        $deadline = microtime(true) + 10;
-        try {
-            while (microtime(true) < $deadline) {
-                $socket = @stream_socket_accept($server, max(0.1, $deadline - microtime(true)));
-                if ($socket === false) {
-                    continue;
-                }
-                stream_set_timeout($socket, 5);
-                // Byte by byte, unbuffered: anything read past the token line would sit in PHP's buffer, where
-                // stream_select cannot see it, and the client's first message would wait for its second.
-                stream_set_read_buffer($socket, 0);
-                $line = '';
-                while (strlen($line) < 128 && ($byte = fread($socket, 1)) !== false && $byte !== '' && $byte !== "\n") {
-                    $line .= $byte;
-                }
-                if (hash_equals($token, $line)) {
-                    return $socket;
-                }
-                fclose($socket);
-            }
-        } finally {
-            fclose($server);
-        }
-        proc_terminate($relay);
+        self::$inputRelay ??= WindowsProviderProcess::launch(
+            PHP_BINARY,
+            [dirname(__DIR__, 2).'/resources/stdin-relay.php'],
+            getcwd() ?: sys_get_temp_dir(),
+            ChildEnv::build(getenv())->env,
+            STDIN,
+        );
 
-        throw new \RuntimeException('the stdin relay did not connect');
+        return self::$inputRelay->output();
     }
 }

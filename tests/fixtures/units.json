@@ -1,5 +1,5 @@
 {
- "reference": "prism-acp-ts 0.23.2",
+ "reference": "prism-acp-ts 0.24.1",
  "claudeRateLimit": [
   [
    "{\"status\":\"allowed\",\"resetsAt\":1792450800,\"rateLimitType\":\"five_hour\",\"overageStatus\":\"rejected\",\"overageDisabledReason\":\"out_of_credits\",\"isUsingOverage\":false,\"unifiedWindows\":{\"five_hour\":{\"utilization\":0.29,\"resetsAt\":1792450800},\"seven_day\":{\"utilization\":0.07,\"resetsAt\":1792929200}}}",
@@ -2070,7 +2070,7 @@
   ],
   [
    "{\"rateLimits\":{\"primary\":{\"usedPercent\":45,\"windowDurationMins\":300,\"resetsAt\":1800000000},\"secondary\":{\"usedPercent\":12.5,\"windowDurationMins\":10080,\"resetsAt\":1800500000},\"credits\":{\"hasCredits\":true,\"unlimited\":false,\"balance\":true},\"planType\":\"pro\",\"spendControlReached\":false,\"rateLimitReachedType\":null,\"ordinaryUsageAllowed\":true},\"rateLimitResetCredits\":{\"availableCount\":2}}",
-   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite number >= 0 or null, got true\"}",
+   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite non-negative decimal string, number or null, got true\"}",
    null
   ],
   [
@@ -2085,7 +2085,7 @@
   ],
   [
    "{\"rateLimits\":{\"primary\":{\"usedPercent\":45,\"windowDurationMins\":300,\"resetsAt\":1800000000},\"secondary\":{\"usedPercent\":12.5,\"windowDurationMins\":10080,\"resetsAt\":1800500000},\"credits\":{\"hasCredits\":true,\"unlimited\":false,\"balance\":-1},\"planType\":\"pro\",\"spendControlReached\":false,\"rateLimitReachedType\":null,\"ordinaryUsageAllowed\":true},\"rateLimitResetCredits\":{\"availableCount\":2}}",
-   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite number >= 0 or null, got -1\"}",
+   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite non-negative decimal string, number or null, got -1\"}",
    null
   ],
   [
@@ -2125,42 +2125,42 @@
   ],
   [
    "{\"rateLimits\":{\"primary\":{\"usedPercent\":45,\"windowDurationMins\":300,\"resetsAt\":1800000000},\"secondary\":{\"usedPercent\":12.5,\"windowDurationMins\":10080,\"resetsAt\":1800500000},\"credits\":{\"hasCredits\":true,\"unlimited\":false,\"balance\":\"\"},\"planType\":\"pro\",\"spendControlReached\":false,\"rateLimitReachedType\":null,\"ordinaryUsageAllowed\":true},\"rateLimitResetCredits\":{\"availableCount\":2}}",
-   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite number >= 0 or null, got string(0)\"}",
+   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite non-negative decimal string, number or null, got string(0)\"}",
    null
   ],
   [
    "{\"rateLimits\":{\"primary\":{\"usedPercent\":45,\"windowDurationMins\":300,\"resetsAt\":1800000000},\"secondary\":{\"usedPercent\":12.5,\"windowDurationMins\":10080,\"resetsAt\":1800500000},\"credits\":{\"hasCredits\":true,\"unlimited\":false,\"balance\":\"x\"},\"planType\":\"pro\",\"spendControlReached\":false,\"rateLimitReachedType\":null,\"ordinaryUsageAllowed\":true},\"rateLimitResetCredits\":{\"availableCount\":2}}",
-   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite number >= 0 or null, got string(1)\"}",
+   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite non-negative decimal string, number or null, got string(1)\"}",
    null
   ],
   [
    "{\"rateLimits\":{\"primary\":{\"usedPercent\":45,\"windowDurationMins\":300,\"resetsAt\":1800000000},\"secondary\":{\"usedPercent\":12.5,\"windowDurationMins\":10080,\"resetsAt\":1800500000},\"credits\":{\"hasCredits\":true,\"unlimited\":false,\"balance\":\"__proto__\"},\"planType\":\"pro\",\"spendControlReached\":false,\"rateLimitReachedType\":null,\"ordinaryUsageAllowed\":true},\"rateLimitResetCredits\":{\"availableCount\":2}}",
-   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite number >= 0 or null, got string(9)\"}",
+   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite non-negative decimal string, number or null, got string(9)\"}",
    null
   ],
   [
    "{\"rateLimits\":{\"primary\":{\"usedPercent\":45,\"windowDurationMins\":300,\"resetsAt\":1800000000},\"secondary\":{\"usedPercent\":12.5,\"windowDurationMins\":10080,\"resetsAt\":1800500000},\"credits\":{\"hasCredits\":true,\"unlimited\":false,\"balance\":\"toString\"},\"planType\":\"pro\",\"spendControlReached\":false,\"rateLimitReachedType\":null,\"ordinaryUsageAllowed\":true},\"rateLimitResetCredits\":{\"availableCount\":2}}",
-   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite number >= 0 or null, got string(8)\"}",
+   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite non-negative decimal string, number or null, got string(8)\"}",
    null
   ],
   [
    "{\"rateLimits\":{\"primary\":{\"usedPercent\":45,\"windowDurationMins\":300,\"resetsAt\":1800000000},\"secondary\":{\"usedPercent\":12.5,\"windowDurationMins\":10080,\"resetsAt\":1800500000},\"credits\":{\"hasCredits\":true,\"unlimited\":false,\"balance\":\"constructor\"},\"planType\":\"pro\",\"spendControlReached\":false,\"rateLimitReachedType\":null,\"ordinaryUsageAllowed\":true},\"rateLimitResetCredits\":{\"availableCount\":2}}",
-   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite number >= 0 or null, got string(11)\"}",
+   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite non-negative decimal string, number or null, got string(11)\"}",
    null
   ],
   [
    "{\"rateLimits\":{\"primary\":{\"usedPercent\":45,\"windowDurationMins\":300,\"resetsAt\":1800000000},\"secondary\":{\"usedPercent\":12.5,\"windowDurationMins\":10080,\"resetsAt\":1800500000},\"credits\":{\"hasCredits\":true,\"unlimited\":false,\"balance\":[]},\"planType\":\"pro\",\"spendControlReached\":false,\"rateLimitReachedType\":null,\"ordinaryUsageAllowed\":true},\"rateLimitResetCredits\":{\"availableCount\":2}}",
-   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite number >= 0 or null, got array(0)\"}",
+   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite non-negative decimal string, number or null, got array(0)\"}",
    null
   ],
   [
    "{\"rateLimits\":{\"primary\":{\"usedPercent\":45,\"windowDurationMins\":300,\"resetsAt\":1800000000},\"secondary\":{\"usedPercent\":12.5,\"windowDurationMins\":10080,\"resetsAt\":1800500000},\"credits\":{\"hasCredits\":true,\"unlimited\":false,\"balance\":{}},\"planType\":\"pro\",\"spendControlReached\":false,\"rateLimitReachedType\":null,\"ordinaryUsageAllowed\":true},\"rateLimitResetCredits\":{\"availableCount\":2}}",
-   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite number >= 0 or null, got object\"}",
+   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite non-negative decimal string, number or null, got object\"}",
    null
   ],
   [
    "{\"rateLimits\":{\"primary\":{\"usedPercent\":45,\"windowDurationMins\":300,\"resetsAt\":1800000000},\"secondary\":{\"usedPercent\":12.5,\"windowDurationMins\":10080,\"resetsAt\":1800500000},\"credits\":{\"hasCredits\":true,\"unlimited\":false,\"balance\":{\"a\":1}},\"planType\":\"pro\",\"spendControlReached\":false,\"rateLimitReachedType\":null,\"ordinaryUsageAllowed\":true},\"rateLimitResetCredits\":{\"availableCount\":2}}",
-   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite number >= 0 or null, got object\"}",
+   "{\"ok\":false,\"reason\":\"codex_rate_limit: rateLimits.credits.balance expected finite non-negative decimal string, number or null, got object\"}",
    null
   ],
   [

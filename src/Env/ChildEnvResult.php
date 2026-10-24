@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Prism\Acp\Env;
 
-final class ChildEnvResult
+final readonly class ChildEnvResult
 {
     /**
      * @param  array<string, string>  $env  the environment to hand to the child
      * @param  list<string>  $withheld  NAMES of outranking credentials found and withheld; never their values
      */
     public function __construct(
-        public readonly array $env,
-        public readonly array $withheld,
+        public array $env,
+        public array $withheld,
     ) {}
 }

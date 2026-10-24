@@ -59,8 +59,8 @@ final class ChildEnv
         array $set = [],
         bool $allowSubscriptionOverridingCredentials = false,
     ): ChildEnvResult {
-        $outranking = array_fill_keys(array_map('strtoupper', self::OUTRANKING_CREDENTIALS), true);
-        $allowed = array_fill_keys(array_map('strtoupper', [...self::BASE_ALLOW, ...$allow]), true);
+        $outranking = array_fill_keys(array_map(strtoupper(...), self::OUTRANKING_CREDENTIALS), true);
+        $allowed = array_fill_keys(array_map(strtoupper(...), [...self::BASE_ALLOW, ...$allow]), true);
 
         $env = [];
         $withheld = [];

@@ -11,36 +11,36 @@ use Prism\Acp\Mcp\McpServers;
  *
  * @phpstan-import-type Server from McpServers
  */
-final class ClaudeDriverOptions
+final readonly class ClaudeDriverOptions
 {
     /**
      * @param  list<string>  $binaryArgs  placed before the provider's own: for a binary that is an interpreter
      * @param  array<string, string|null>|null  $parentEnv  the environment to build the child's from; this process's when null
      * @param  list<string>  $allowEnv  extra environment names to pass through to the child
      * @param  list<Server>  $mcpServers  explicit per-session MCP servers, as McpServers::read returns them
-     * @param  list<string>|null  $permissionPrompts  ask a person before these tools run (single identifiers: Bash, Write, ...)
+     * @param  list<string>|null  $permissionPrompts  ask before these tools run (single identifiers), or ['*'] for every tool
      * @param  list<string>  $allowedTools
      * @param  list<string>  $disallowedTools
      */
     public function __construct(
         /** The agent's working directory: absolute. */
-        public readonly string $cwd,
-        public readonly string $binary = 'claude',
-        public readonly array $binaryArgs = [],
-        public readonly ?array $parentEnv = null,
-        public readonly array $allowEnv = [],
+        public string $cwd,
+        public string $binary = 'claude',
+        public array $binaryArgs = [],
+        public ?array $parentEnv = null,
+        public array $allowEnv = [],
         /** Resume an existing CLI session instead of starting a new one. */
-        public readonly ?string $resumeSessionId = null,
-        public readonly array $mcpServers = [],
+        public ?string $resumeSessionId = null,
+        public array $mcpServers = [],
         /** One of ClaudeDriver::PERMISSION_MODES. */
-        public readonly ?string $permissionMode = null,
+        public ?string $permissionMode = null,
         /** An alias (`sonnet`) or a full id; null is the CLI's own default. */
-        public readonly ?string $model = null,
-        public readonly ?array $permissionPrompts = null,
+        public ?string $model = null,
+        public ?array $permissionPrompts = null,
         /** The PHP CLI that runs the permission hook; this one when it is a CLI, else `php` on PATH. */
-        public readonly ?string $phpBinary = null,
-        public readonly array $allowedTools = [],
-        public readonly array $disallowedTools = [],
+        public ?string $phpBinary = null,
+        public array $allowedTools = [],
+        public array $disallowedTools = [],
     ) {}
 
     /**

@@ -19,7 +19,7 @@ use Prism\Acp\Async\Deferred;
  *   problem arrives there and nowhere else.
  * - onExit: the agent's process ended.
  */
-final class DriverEvents
+final readonly class DriverEvents
 {
     /**
      * @param  (\Closure(array<string, mixed>): void)|null  $onUpdate
@@ -30,11 +30,11 @@ final class DriverEvents
      * @param  (\Closure(?int, ?string): void)|null  $onExit
      */
     public function __construct(
-        public readonly ?\Closure $onUpdate = null,
-        public readonly ?\Closure $onRequestPermission = null,
-        public readonly ?\Closure $onTurnEnd = null,
-        public readonly ?\Closure $onProtocolError = null,
-        public readonly ?\Closure $onStderr = null,
-        public readonly ?\Closure $onExit = null,
+        public ?\Closure $onUpdate = null,
+        public ?\Closure $onRequestPermission = null,
+        public ?\Closure $onTurnEnd = null,
+        public ?\Closure $onProtocolError = null,
+        public ?\Closure $onStderr = null,
+        public ?\Closure $onExit = null,
     ) {}
 }

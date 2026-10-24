@@ -5,15 +5,15 @@ declare(strict_types=1);
 namespace Prism\Acp\Ndjson;
 
 /** Why a line could not be read. Carries the line's SIZE, never any of its content. */
-final class FrameError
+final readonly class FrameError
 {
     private function __construct(
         /** 'oversize' when the cap was hit, 'invalid-json' when parsing failed. */
-        public readonly string $kind,
+        public string $kind,
         /** Byte length of the offending line, reported instead of its content. */
-        public readonly int $bytes,
+        public int $bytes,
         /** Safe to log: never contains any part of the line. */
-        public readonly string $message,
+        public string $message,
     ) {}
 
     public static function oversize(int $bytes): self

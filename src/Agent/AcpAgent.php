@@ -15,6 +15,7 @@ use Prism\Acp\Prompt\Prompt;
 use Prism\Acp\Prompt\PromptRefused;
 use Prism\Acp\Support\Js;
 use Prism\Acp\Support\Undefined;
+use Prism\Acp\Version;
 
 /**
  * The ACP agent surface: `initialize`, `session/new`, `session/load`, `session/set_model`, `session/prompt`,
@@ -83,7 +84,7 @@ final class AcpAgent
     /** @return list<string> session ids currently open */
     public function sessionIds(): array
     {
-        return array_map('strval', array_keys($this->sessions));
+        return array_map(strval(...), array_keys($this->sessions));
     }
 
     /** Stop every session's process. */
@@ -112,7 +113,7 @@ final class AcpAgent
         ];
         $response = [
             'protocolVersion' => self::PROTOCOL_VERSION,
-            'agentInfo' => $this->agentInfo ?? ['name' => 'particle-academy/prism-acp', 'title' => 'Prism ACP', 'version' => '0.1.0'],
+            'agentInfo' => $this->agentInfo ?? ['name' => 'particle-academy/prism-acp', 'title' => 'Prism ACP', 'version' => Version::VERSION],
             // Empty because there is no authentication STEP: the CLI is already signed in, and no credential travels here.
             'authMethods' => [],
             'agentCapabilities' => $capabilities,

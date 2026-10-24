@@ -11,7 +11,7 @@ use Prism\Acp\Support\Undefined;
  * Codex's percentage-based rate limit, read from an allow-list of fields: identifiers and unknown fields never pass
  * through. Ported from prism-acp-ts src/codex/rate-limit.ts. `resetsAtMs` is converted from Codex's epoch SECONDS.
  */
-final class CodexRateLimit implements \JsonSerializable
+final readonly class CodexRateLimit implements \JsonSerializable
 {
     /**
      * @param  array{usedPercent: int|float, windowDurationMins: int|float, resetsAtMs: int|float}|null  $primary
@@ -21,14 +21,14 @@ final class CodexRateLimit implements \JsonSerializable
      * @param  mixed  $rateLimitReachedType  string, null, or Undefined when the payload did not carry it
      */
     public function __construct(
-        public readonly ?bool $ordinaryUsageAllowed,
-        public readonly ?string $planType,
-        public readonly ?array $primary,
-        public readonly ?array $secondary,
-        public readonly ?array $credits,
-        private readonly mixed $spendControlReached,
-        private readonly mixed $rateLimitReachedType,
-        public readonly int|float|null $availableResetCredits,
+        public ?bool $ordinaryUsageAllowed,
+        public ?string $planType,
+        public ?array $primary,
+        public ?array $secondary,
+        public ?array $credits,
+        private mixed $spendControlReached,
+        private mixed $rateLimitReachedType,
+        public int|float|null $availableResetCredits,
     ) {}
 
     public static function parse(mixed $value): ?self
@@ -77,10 +77,14 @@ final class CodexRateLimit implements \JsonSerializable
                 return self::refuse('rateLimits.credits.unlimited', 'boolean', $unlimited, ! Js::has($rawCredits, 'unlimited'));
             }
             $balance = Js::get($rawCredits, 'balance');
-            if ($balance !== null && ! Js::finite($balance, 0)) {
-                return self::refuse('rateLimits.credits.balance', 'finite number >= 0 or null', $balance, false);
+            // Codex's current CreditsSnapshot uses decimal strings. Keep the reference's numeric public value;
+            // whitespace, exponents, signs, booleans, infinity and trailing junk must never become valid credits.
+            $numericBalance = is_string($balance) && preg_match('/\A[0-9]+(?:\.[0-9]+)?\z/', $balance) === 1
+                ? (float) $balance : $balance;
+            if ($numericBalance !== null && ! Js::finite($numericBalance, 0)) {
+                return self::refuse('rateLimits.credits.balance', 'finite non-negative decimal string, number or null', $balance, false);
             }
-            $credits = ['hasCredits' => $hasCredits, 'unlimited' => $unlimited, 'balance' => $balance];
+            $credits = ['hasCredits' => $hasCredits, 'unlimited' => $unlimited, 'balance' => $numericBalance];
         }
 
         $planType = Js::get($rates, 'planType');

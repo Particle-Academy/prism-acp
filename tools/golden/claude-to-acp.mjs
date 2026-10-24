@@ -13,7 +13,7 @@ import { pathToFileURL } from 'node:url';
 const reference = resolve(process.argv[2] ?? '');
 const { NdjsonFramer, ClaudeToAcp } = await import(pathToFileURL(join(reference, 'dist', 'index.js')).href);
 const version = JSON.parse(readFileSync(join(reference, 'package.json'), 'utf8')).version;
-const fixtures = join(reference, 'test', 'fixtures');
+const fixtures = resolve(process.argv[3] ?? join(reference, 'test', 'fixtures'));
 const out = new URL('../../tests/fixtures/claude-to-acp/', import.meta.url);
 rmSync(out, { recursive: true, force: true });
 mkdirSync(new URL('corpus/', out), { recursive: true });
