@@ -39,12 +39,14 @@ final readonly class ClaudeDriverOptions
         /** An alias (`sonnet`) or a full id; null is the CLI's own default. */
         public ?string $model = null,
         public ?array $permissionPrompts = null,
-        /** The PHP CLI that runs the permission hook; this one when it is a CLI, else `php` on PATH. */
+        /** Trusted absolute PHP CLI path. Defaults to PHP_BINARY only under the CLI SAPI; verified before use. */
         public ?string $phpBinary = null,
         public array $allowedTools = [],
         public array $disallowedTools = [],
         public array $disabledMcpServers = [],
         public ?ProviderCredentials $credentials = null,
+        /** Trusted host policy, 1..86400 seconds. The native guard expires before Claude's timeout. */
+        public int $permissionTimeoutSeconds = Approvals::WAIT_SECONDS,
     ) {}
 
     /**
@@ -71,6 +73,7 @@ final readonly class ClaudeDriverOptions
             disallowedTools: $this->disallowedTools,
             disabledMcpServers: $this->disabledMcpServers,
             credentials: $this->credentials,
+            permissionTimeoutSeconds: $this->permissionTimeoutSeconds,
         );
     }
 }

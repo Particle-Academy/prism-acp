@@ -108,6 +108,14 @@ static class Supervisor
     [DllImport("kernel32.dll", SetLastError = true)]
     static extern bool GetExitCodeProcess(IntPtr process, out uint code);
     [DllImport("kernel32.dll")]
+    static extern IntPtr GetCurrentProcess();
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool DuplicateHandle(IntPtr sourceProcess, IntPtr source, IntPtr targetProcess, out IntPtr target, uint access, bool inherit, uint options);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern IntPtr CreateFileW(string name, uint access, uint share, IntPtr attributes, uint disposition, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool WriteFile(IntPtr handle, byte[] bytes, uint count, out uint written, IntPtr overlapped);
+    [DllImport("kernel32.dll")]
     static extern bool CloseHandle(IntPtr handle);
 
     static StreamWriter control;
@@ -452,8 +460,77 @@ static class Supervisor
         }
     }
 
-    static int Main()
+    static string QuoteArgument(string value)
     {
+        var output = new StringBuilder("\""); int slashes = 0;
+        foreach (char c in value)
+        {
+            if (c == '\\') { slashes++; continue; }
+            output.Append('\\', c == '"' ? slashes * 2 : slashes); slashes = 0;
+            if (c == '"') output.Append('\\');
+            output.Append(c);
+        }
+        return output.Append('\\', slashes * 2).Append('"').ToString();
+    }
+
+    // Exec-form PHP hook: raw inherited stdio, no shell/Console encoding, per-call kill-on-close job.
+    // Only a validated explicit allow exits42. Empty/fatal/ordinary0, invalid args and deadlines all block.
+    static int Approval(string[] args)
+    {
+        var handles = new IntPtr[3];
+        IntPtr nullFile = IntPtr.Zero, job = IntPtr.Zero;
+        ProcessInformation info = new ProcessInformation();
+        try
+        {
+            int seconds;
+            if (args.Length != 4 || args[0] != "approval" || !Path.IsPathRooted(args[1]) || !Path.IsPathRooted(args[2]) ||
+                !int.TryParse(args[3], NumberStyles.None, CultureInfo.InvariantCulture, out seconds) || seconds < 1 || seconds > 86400)
+                throw new ArgumentException();
+            nullFile = CreateFileW("NUL", 0x40000000, 3, IntPtr.Zero, 3, 0x80, IntPtr.Zero);
+            if (nullFile == IntPtr.Zero || nullFile == new IntPtr(-1)) throw new IOException();
+            IntPtr current = GetCurrentProcess();
+            var originals = new IntPtr[] { GetStdHandle(-10), GetStdHandle(-11), nullFile };
+            for (int i = 0; i < 3; i++)
+                if (!DuplicateHandle(current, originals[i], current, out handles[i], 0, true, 2)) throw new IOException();
+            job = CreateJobObjectW(IntPtr.Zero, null);
+            var limit = new ExtendedLimit(); limit.Basic.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if (job == IntPtr.Zero || !SetInformationJobObject(job, JobObjectExtendedLimitInformation, ref limit, Marshal.SizeOf(typeof(ExtendedLimit)))) throw new IOException();
+            var startup = new StartupInfo(); startup.cb = Marshal.SizeOf(typeof(StartupInfo)); startup.dwFlags = STARTF_USESTDHANDLES;
+            startup.hStdInput = handles[0]; startup.hStdOutput = handles[1]; startup.hStdError = handles[2];
+            // -n prevents inherited ini/auto_prepend_file from bypassing the trusted script's validation.
+            if (!CreateProcessW(args[1], new StringBuilder(QuoteArgument(args[1]) + " -n -d display_errors=stderr -d log_errors=0 -d html_errors=0 " + QuoteArgument(args[2])),
+                IntPtr.Zero, IntPtr.Zero, true, CREATE_SUSPENDED | 0x08000000, IntPtr.Zero, Environment.CurrentDirectory, ref startup, out info)) throw new IOException();
+            if (!AssignProcessToJobObject(job, info.hProcess) || ResumeThread(info.hThread) == uint.MaxValue) { TerminateProcess(info.hProcess, 2); throw new IOException(); }
+            CloseHandle(info.hThread); info.hThread = IntPtr.Zero;
+            using (var exited = new ManualResetEvent(false))
+            {
+                exited.SafeWaitHandle = new SafeWaitHandle(info.hProcess, false);
+                if (!exited.WaitOne(seconds * 1000 + 1000)) throw new IOException();
+            }
+            uint code;
+            if (GetExitCodeProcess(info.hProcess, out code) && code == 42) return 0;
+        }
+        catch { }
+        finally
+        {
+            foreach (IntPtr handle in handles) if (handle != IntPtr.Zero) CloseHandle(handle);
+            if (nullFile != IntPtr.Zero && nullFile != new IntPtr(-1)) CloseHandle(nullFile);
+            if (job != IntPtr.Zero) CloseHandle(job);
+            if (info.hThread != IntPtr.Zero) CloseHandle(info.hThread);
+            if (info.hProcess != IntPtr.Zero) CloseHandle(info.hProcess);
+        }
+        try
+        {
+            byte[] message = Encoding.UTF8.GetBytes("prism-acp: approval hook failed or denied; tool call blocked\n");
+            uint written; WriteFile(GetStdHandle(-12), message, (uint)message.Length, out written, IntPtr.Zero);
+        }
+        catch { }
+        return 2;
+    }
+
+    static int Main(string[] args)
+    {
+        if (args.Length > 0) return Approval(args);
         string channel = Environment.GetEnvironmentVariable("PRISM_ACP_TREE_CHANNEL");
         string token = Environment.GetEnvironmentVariable("PRISM_ACP_TREE_TOKEN");
         bool inheritInput = Environment.GetEnvironmentVariable("PRISM_ACP_TREE_INHERIT_STDIN") == "1";

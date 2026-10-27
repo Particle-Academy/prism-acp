@@ -12,6 +12,7 @@ use Prism\Acp\Claude\ClaudeDriverOptions;
 use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Meta;
 use Prism\Acp\Ndjson\Json;
+use Prism\Acp\Process\ProcessTreeException;
 
 /*
  * THE CLAUDE DRIVER, AGAINST A PROCESS. tests/fixtures/fake-claude.php stands in for the CLI (it speaks the real
@@ -134,6 +135,27 @@ final class ClaudeHarness
 }
 
 describe('ClaudeDriver against a process', function () {
+    it('refuses an invalid approval runtime before creating an API-key home or launching the CLI', function () {
+        $root = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-runtime-before-home-'.bin2hex(random_bytes(5));
+        mkdir($root);
+        $home = $root.DIRECTORY_SEPARATOR.'app';
+        $driver = new ClaudeDriver(new ClaudeDriverOptions(
+            cwd: $root,
+            binary: PHP_BINARY,
+            binaryArgs: [dirname(__DIR__).'/fixtures/fake-claude.php'],
+            permissionPrompts: ['*'],
+            phpBinary: 'php',
+            credentials: new ProviderCredentials('apiKey', 'dummy-private-key', $home),
+        ), new DriverEvents, new Loop);
+        try {
+            expect(fn () => $driver->start())->toThrow(ProcessTreeException::class, 'absolute existing PHP CLI')
+                ->and(is_dir($home))->toBeFalse()->and($driver->processTree())->toBeNull();
+        } finally {
+            $driver->stop(0)->await();
+            rmdir($root);
+        }
+    });
+
     it('withholds a dangling key prefix when stderr ends and flushes it before exit', function (): void {
         $root = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-claude-cutoff-key-'.bin2hex(random_bytes(5));
         mkdir($root);
@@ -369,7 +391,7 @@ describe('ClaudeDriver: permission prompts, end to end through the hook', functi
         $h->turn('hook Bash');
         $answer = json_decode($h->said(), true);
 
-        expect($answer['exit'])->toBe(0)
+        expect($answer['exit'])->toBe(2)
             ->and($answer['stdout']['hookSpecificOutput']['permissionDecision'])->toBe('deny')
             ->and($answer['stdout']['hookSpecificOutput']['permissionDecisionReason'])->toBe($reason);
         $h->finish();
@@ -394,7 +416,8 @@ describe('ClaudeDriver: permission prompts, end to end through the hook', functi
         $h->turn('hi');
         $settings = $h->cli()[0]['argv'];
         $settingsPath = $settings[array_search('--settings', $settings, true) + 1];
-        $command = json_decode((string) file_get_contents($settingsPath), true)['hooks']['PreToolUse'][0]['hooks'][0]['command'];
+        $hook = json_decode((string) file_get_contents($settingsPath), true)['hooks']['PreToolUse'][0]['hooks'][0];
+        $command = [$hook['command'], ...$hook['args']];
         // The hook run with no channel in its environment, as a hook outside this session would be.
         $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null, ['SystemRoot' => getenv('SystemRoot') ?: '']);
         fwrite($pipes[0], '{"tool_name":"Bash"}');
@@ -402,7 +425,9 @@ describe('ClaudeDriver: permission prompts, end to end through the hook', functi
         $out = stream_get_contents($pipes[1]);
         $err = stream_get_contents($pipes[2]);
 
-        expect(proc_close($process))->toBe(2)->and($out)->toBe('')->and($err)->toContain('no approval channel');
+        expect(proc_close($process))->toBe(2)
+            ->and(json_decode((string) $out, true)['hookSpecificOutput']['permissionDecision'])->toBe('deny')
+            ->and($err)->toContain('approval hook failed or denied');
         $h->finish();
     });
 
@@ -412,7 +437,8 @@ describe('ClaudeDriver: permission prompts, end to end through the hook', functi
         $h->turn('hi');
         $settings = $h->cli()[0]['argv'];
         $settingsPath = $settings[array_search('--settings', $settings, true) + 1];
-        $command = json_decode((string) file_get_contents($settingsPath), true)['hooks']['PreToolUse'][0]['hooks'][0]['command'];
+        $hook = json_decode((string) file_get_contents($settingsPath), true)['hooks']['PreToolUse'][0]['hooks'][0];
+        $command = [$hook['command'], ...$hook['args']];
         // The channel the CLI was given, with a different token presented on it.
         $env = getenv();
         $reflection = new ReflectionProperty(ClaudeDriver::class, 'approvals');
@@ -433,10 +459,14 @@ describe('ClaudeDriver: permission prompts, end to end through the hook', functi
 
             return $code !== null;
         });
+        $out = stream_get_contents($pipes[1]);
         $err = stream_get_contents($pipes[2]);
         proc_close($process);
 
-        expect($code)->toBe(2)->and($err)->toContain('refused (401)')->and($h->permissionRequests)->toBe([]);
+        expect($code)->toBe(2)
+            ->and(json_decode((string) $out, true)['hookSpecificOutput']['permissionDecision'])->toBe('deny')
+            ->and($err)->toContain('approval hook failed or denied')
+            ->and($h->permissionRequests)->toBe([]);
         $h->finish();
     });
 })->skip(PHP_OS_FAMILY !== 'Windows', 'containment exists on Windows only so far');

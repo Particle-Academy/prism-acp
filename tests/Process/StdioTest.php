@@ -132,7 +132,7 @@ describe('the agent over stdio', function () {
                 }
                 $hook = json_decode($said, true, flags: JSON_THROW_ON_ERROR);
                 expect($answer->result->stopReason)->toBe('end_turn')
-                    ->and($hook['exit'])->toBe(0)
+                    ->and($hook['exit'])->toBe($decision === 'allow' ? 0 : 2)
                     ->and($hook['stdout']['hookSpecificOutput']['permissionDecision'])->toBe($decision)
                     ->and($hook['stdout']['hookSpecificOutput']['permissionDecisionReason'])->toStartWith($reason);
             }

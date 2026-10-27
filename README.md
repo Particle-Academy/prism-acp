@@ -10,7 +10,7 @@ automatic service-provider discovery and an artisan command are not included. Th
 ## Install
 
 ```sh
-composer require particle-academy/prism-acp:0.1.0-alpha.4
+composer require particle-academy/prism-acp:0.1.0-alpha.5
 ```
 
 Requires PHP 8.2 or newer, `ext-ctype`, `ext-json`, `ext-mbstring`, Windows with the .NET Framework 4 C# compiler, and an installed,
@@ -37,6 +37,12 @@ The Claude CLI requests permission through the ACP client before every tool call
 allows the tool; cancellation, a missing handler, malformed replies and hook failures block it. Reasons accompany
 both allow and deny. This is a tool-approval mechanism, not an operating-system sandbox: a permitted command has
 the signed-in user's permissions. Use a trusted ACP client and working directory.
+
+With permission prompts enabled, a stable Claude Code version of at least 2.1.295 is required; the native test pin
+is 2.1.310. Prompts and EOF wait for its initialize version, and a missing or changed later system/init version
+closes the session. The native exec-form hook allows only its script's validated explicit allow, and blocks silent
+zero exits, invalid responses, crashes and timeouts. Its PHP child uses `-n` and fixed diagnostic settings, so hook
+execution does not load the application's ini files or require optional extensions.
 
 Codex uses `on-request` approval and its own sandbox default. Its five native command/file/permission approval
 families map to the choices shown by the ACP client; only an offered choice can allow. Cancellation and missing,
@@ -68,6 +74,22 @@ $served['closed']->await();
 Load your application's Composer autoloader before this example. `permissionPrompts` can instead list individual
 tool identifiers, such as `['Bash', 'Write']`. Omitting it leaves permission handling to Claude's own configuration;
 an embedding application must choose its policy deliberately. Explicit per-session MCP configuration is supported.
+
+The hook interpreter defaults to `PHP_BINARY` only when the embedding SAPI is `cli`. For CGI, FPM, phpdbg,
+CLI-server or another embedded SAPI, supply `phpBinary: 'C:/absolute/path/php.exe'` in trusted constructor options.
+An implicit PATH lookup is refused. The package probes that executable as a working PHP CLI under containment
+before creating the hook configuration. An explicit CGI/debugger executable is refused too. This changes the
+previous non-CLI fallback; it does not add Linux/macOS provider containment. The optional trusted
+`permissionTimeoutSeconds` ranges from 1 to 86400 (default 86400); the channel and native guard expire before the
+CLI's hook timeout. Both options survive `forSession()` and cannot be supplied through ACP.
+
+Concurrent Windows first launches publish digest-named supervisor generations before atomically replacing a small
+digest pointer. Every reader validates the pointer, filename and actual bytes. Existing generations remain available
+to sessions that selected them; a damaged cache is rebuilt once or refused. The cache filesystem must support hard
+links and atomic replacement; no uncontained fallback is offered.
+The cold-cache regression uses owned supervisor copies with inert assembly metadata to force distinct compiler
+generations. It records real compiler-output digests in every round and asserts that the production C# source stays
+unchanged; both the released publisher and corrected publisher face the same provider/approval oracle.
 
 For Codex, use `CodexDriverOptions` and `CodexDriver` from `Prism\Acp\Codex` in the same factory, with
 `driverCapabilities: CodexDriver::CAPABILITIES`. The constructor also accepts trusted `approvalPolicy`, `sandbox`,
@@ -153,7 +175,13 @@ fixtures from its corresponding source commit, hostile mutations and 648 reader 
 requests, permissions and failures against that reference. CI regenerates these expectations and fails on drift.
 Codex scenarios exercise the published driver's actual state machine through synthetic protocol frames, including
 outbound RPC, updates, approvals, failures and MCP policy. They are synthetic scenarios, not native turn captures.
-The reference version is explicit; this is not a claim of complete TypeScript feature parity.
+**PHP behind TS: PARTIAL (6 contracts missing).** The executed golden baseline remains 0.25.1; reference releases
+through 0.32.0 have been reviewed. Missing contracts tracked by G-141 are 0.26 readRateLimits, 0.27 MCP server status,
+0.28 AppContainer LOCAL, 0.29 nativeTools, 0.31 replay markers/opt-out, and G-140's 0.32 restricted startup flags.
+The currency watchdog executes PHP API/cache-reader probes, refuses an unreviewed newer published version, and
+refuses either a missing contract absent from this list or a newly exposed contract still listed as missing.
+These conservative inventory probes require review of surface changes; native safety and reference conformance
+are checked separately. The reviewed version advances only in a reviewed change, never automatically.
 
 Windows CI runs fake-provider protocol and real process-tree tests, including a host hard kill while relay input
 stays open. Ubuntu checks the portable primitives and verifies that unsupported containment refuses before spawn.

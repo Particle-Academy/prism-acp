@@ -6,3 +6,6 @@
 /.reference-runtime/
 /.reference-source/
 /.third-party-allowlist/
+/.native-cli/
+/.approval-evidence/
+/.fpm-runtime/
