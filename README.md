@@ -87,6 +87,9 @@ Concurrent Windows first launches publish digest-named supervisor generations be
 digest pointer. Every reader validates the pointer, filename and actual bytes. Existing generations remain available
 to sessions that selected them; a damaged cache is rebuilt once or refused. The cache filesystem must support hard
 links and atomic replacement; no uncontained fallback is offered.
+The cold-cache regression uses owned supervisor copies with inert assembly metadata to force distinct compiler
+generations. It records real compiler-output digests in every round and asserts that the production C# source stays
+unchanged; both the released publisher and corrected publisher face the same provider/approval oracle.
 
 For Codex, use `CodexDriverOptions` and `CodexDriver` from `Prism\Acp\Codex` in the same factory, with
 `driverCapabilities: CodexDriver::CAPABILITIES`. The constructor also accepts trusted `approvalPolicy`, `sandbox`,

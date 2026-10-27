@@ -201,6 +201,8 @@ jobs:
           coverage: none
           tools: composer:v2
       - run: composer update --no-scripts --prefer-dist --no-interaction --no-progress
+      - name: Reject missing or inconsistent compiler-generation evidence
+        run: node --test scripts/cold-cache-receipts.test.mjs
       - name: Released publisher must fail the same 20x8 provider and approval oracle
         run: node scripts/check-supervisor-cold-cache.mjs (php -r 'echo PHP_BINARY;')
       - name: Preserve cold-cache receipts

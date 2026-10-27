@@ -89,7 +89,7 @@ echo json_encode([
     'appContainerLocal' => property_exists(CodexDriverOptions::class, 'processTree') || in_array('processTree', $providerParameters, true) || in_array('options', $providerParameters, true),
     'nativeTools' => $nativeTools,
     'approvalGuard' => $guard,
-    'replayMarkersAndOptOut' => property_exists(CodexDriverOptions::class, 'replayHistory') || defined(Meta::class.'::TRANSCRIPT_REPLAY'),
+    'replayMarkersAndOptOut' => property_exists(CodexDriverOptions::class, 'replayHistory') || in_array('particle.academy/replay', (new ReflectionClass(Meta::class))->getConstants(), true),
     'restrictedStartupFlags' => $startupFlags,
     'supervisorGenerations' => $generations,
 ], JSON_THROW_ON_ERROR)."\n";

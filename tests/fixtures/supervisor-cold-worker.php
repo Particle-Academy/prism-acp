@@ -2,6 +2,9 @@
 
 declare(strict_types=1);
 
+// The publisher class is byte-for-byte old/current source in an owned package copy; only C# metadata varies.
+require __DIR__.'/supervisor-compiler-observer.php';
+require $argv[5].'/src/Process/WindowsSupervisorBuild.php';
 require dirname(__DIR__, 2).'/vendor/autoload.php';
 
 use Prism\Acp\Env\ChildEnv;
@@ -57,9 +60,9 @@ try {
     if (! $stop->verified || ! $stop->empty || $stop->survivors !== 0) {
         throw new RuntimeException('inner provider was not verified empty');
     }
-    echo json_encode(['success' => true, 'approval' => $outcomes, 'hashVerified' => true, 'stop' => $stop->toArray()])."\n";
+    echo json_encode(['success' => true, 'approval' => $outcomes, 'hashVerified' => true, 'compiledDigests' => $GLOBALS['prismColdCompilerDigests'], 'generationDigest' => $digest, 'stop' => $stop->toArray()])."\n";
 } catch (Throwable $error) {
-    echo json_encode(['success' => false, 'name' => $error::class, 'message' => $error->getMessage()])."\n";
+    echo json_encode(['success' => false, 'name' => $error::class, 'message' => $error->getMessage(), 'compiledDigests' => $GLOBALS['prismColdCompilerDigests']])."\n";
     $exit = 1;
 } finally {
     $provider?->stop(0);
