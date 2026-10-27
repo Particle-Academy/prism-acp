@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Prism\Acp\Claude;
 
 use Prism\Acp\Agent\PermissionOutcome;
+use Prism\Acp\Process\ContainmentUnavailable;
+use Prism\Acp\Process\WindowsCommand;
+use Prism\Acp\Process\WindowsSupervisorBuild;
 use Prism\Acp\Support\Js;
 
 /**
@@ -30,9 +33,10 @@ final class Approvals
      */
     public const HOOK_SCRIPT = <<<'PHP'
         <?php
-        // prism-acp permission hook. Anything but a readable allow or deny from the channel blocks the tool call.
+        // Only a validated explicit allow exits42, consumed by the native guard. Never install this script directly.
         $block = function (string $why): never {
-            fwrite(STDERR, 'prism-acp: '.$why."\n");
+            fwrite(STDOUT, json_encode(['hookSpecificOutput' => ['hookEventName' => 'PreToolUse', 'permissionDecision' => 'deny', 'permissionDecisionReason' => $why]], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n");
+            fwrite(STDERR, "prism-acp: approval hook failed or denied; tool call blocked\n");
             exit(2);
         };
         $address = getenv('PRISM_ACP_APPROVAL_SOCKET');
@@ -40,39 +44,86 @@ final class Approvals
         if (! is_string($address) || $address === '' || ! is_string($token) || $token === '') {
             $block('no approval channel; the tool call is blocked');
         }
-        $body = (string) stream_get_contents(STDIN);
+        $body = stream_get_contents(STDIN, 1_000_001);
+        if ($body === false || strlen($body) > 1_000_000 || ! json_decode($body) instanceof stdClass) {
+            $block('unreadable hook input; the tool call is blocked');
+        }
         $socket = @stream_socket_client($address, $errno, $errstr, 10);
         if ($socket === false) {
             $block('the approval channel is unreachable; the tool call is blocked');
         }
         stream_set_timeout($socket, 86_400 + 60);
-        if (@fwrite($socket, $token."\n".$body) === false) {
-            $block('the approval channel is unreachable; the tool call is blocked');
+        $request = $token."\n".$body;
+        while ($request !== '') {
+            $written = @fwrite($socket, $request);
+            if ($written === false || $written === 0) {
+                $block('the approval channel is unreachable; the tool call is blocked');
+            }
+            $request = substr($request, $written);
         }
         stream_socket_shutdown($socket, STREAM_SHUT_WR);
-        $answer = (string) stream_get_contents($socket);
+        $answer = stream_get_contents($socket, 1_000_001);
+        $meta = stream_get_meta_data($socket);
+        fclose($socket);
+        if ($answer === false || strlen($answer) > 1_000_000 || ($meta['timed_out'] ?? false)) {
+            $block('unreadable approval response; the tool call is blocked');
+        }
         $newline = strpos($answer, "\n");
         $status = $newline === false ? $answer : substr($answer, 0, $newline);
-        if ($status !== '200') {
-            $block('the approval channel refused ('.($status === '' ? 'no answer' : substr($status, 0, 3)).'); the tool call is blocked');
+        if ($newline === false || $status !== '200') {
+            $block('the approval channel refused; the tool call is blocked');
         }
         $parsed = json_decode((string) substr($answer, $newline + 1));
-        $decision = is_object($parsed) && isset($parsed->hookSpecificOutput->permissionDecision) ? $parsed->hookSpecificOutput->permissionDecision : null;
-        if ($decision !== 'allow' && $decision !== 'deny') {
+        $output = $parsed instanceof stdClass ? ($parsed->hookSpecificOutput ?? null) : null;
+        if (! $parsed instanceof stdClass || count(get_object_vars($parsed)) !== 1 || ! $output instanceof stdClass ||
+            count(get_object_vars($output)) !== 3 || ($output->hookEventName ?? null) !== 'PreToolUse' ||
+            ! is_string($output->permissionDecisionReason ?? null) || ! in_array($output->permissionDecision ?? null, ['allow', 'deny'], true)) {
             $block('unreadable answer; the tool call is blocked');
         }
-        echo json_encode($parsed, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-        exit(0);
+        $bytes = json_encode($parsed, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)."\n";
+        while ($bytes !== '') {
+            $written = @fwrite(STDOUT, $bytes);
+            if ($written === false || $written === 0) {
+                exit(2);
+            }
+            $bytes = substr($bytes, $written);
+        }
+        exit($output->permissionDecision === 'allow' ? 42 : 2);
         PHP;
 
+    /** onFailure:block needs stable Claude2.1.295 or later; no opaque/prerelease version claims. */
+    public static function cliVersion(mixed $value): ?string
+    {
+        if (! is_string($value) || preg_match('/\A(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\z/', $value, $parts) !== 1) {
+            return null;
+        }
+        foreach (array_slice($parts, 1) as $part) {
+            if (strlen($part) > 16 || (strlen($part) === 16 && strcmp($part, '9007199254740991') > 0)) {
+                return null;
+            }
+        }
+        [$major, $minor, $patch] = array_map(intval(...), array_slice($parts, 1));
+
+        return $major > 2 || ($major === 2 && ($minor > 1 || ($minor === 1 && $patch >= 295))) ? $value : null;
+    }
+
+    public static function waitSeconds(int $seconds): int
+    {
+        if ($seconds < 1 || $seconds > self::WAIT_SECONDS) {
+            throw new \InvalidArgumentException('permission prompt timeout must be from 1 to 86400 seconds');
+        }
+
+        return $seconds;
+    }
+
     /**
-     * The `--settings` for this invocation: one PreToolUse command hook for the named tools. The command is the PHP CLI
-     * on the written hook script, both quoted (paths with spaces on Windows).
+     * The `--settings` for this invocation: one exec-form native PreToolUse guard for the named tools.
+     * The verified PHP CLI and hook path are separate arguments, including paths with spaces on Windows.
      *
      * @param  list<string>  $tools
      * @return array<string, mixed>
      */
-    public static function settings(string $phpBinary, string $hookPath, array $tools): array
+    public static function settings(string $phpBinary, string $hookPath, array $tools, int $timeoutSeconds = self::WAIT_SECONDS): array
     {
         if ($tools === []) {
             throw new \InvalidArgumentException('permission prompts need at least one tool name');
@@ -83,12 +134,22 @@ final class Approvals
                 throw new \InvalidArgumentException('refusing tool name '.json_encode($tool).': a tool name is a single identifier');
             }
         }
+        $wait = self::waitSeconds($timeoutSeconds);
+        if (PHP_OS_FAMILY !== 'Windows') {
+            throw new ContainmentUnavailable('Claude permission prompts require the native Windows approval adapter in this release');
+        }
+        foreach ([$phpBinary, $hookPath] as $path) {
+            if ($path === '' || preg_match('/[\x00\r\n]/', $path) === 1 || ! WindowsCommand::isAbsolute($path)) {
+                throw new \InvalidArgumentException('permission hook paths must be absolute single-line paths');
+            }
+        }
+        $adapter = WindowsSupervisorBuild::executable();
 
         return ['hooks' => ['PreToolUse' => [[
             // Claude's empty matcher matches every tool, including tools introduced after this release.
             // Only this explicit sentinel selects it; tool names can never inject a regular expression.
             'matcher' => $tools === ['*'] ? '' : implode('|', $tools),
-            'hooks' => [['type' => 'command', 'command' => "\"{$phpBinary}\" \"{$hookPath}\"", 'timeout' => self::WAIT_SECONDS, 'onFailure' => 'block']],
+            'hooks' => [['type' => 'command', 'command' => $adapter, 'args' => ['approval', $phpBinary, $hookPath, (string) $wait], 'timeout' => $wait + 5, 'onFailure' => 'block']],
         ]]]];
     }
 

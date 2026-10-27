@@ -10,7 +10,7 @@ automatic service-provider discovery and an artisan command are not included. Th
 ## Install
 
 ```sh
-composer require particle-academy/prism-acp:0.1.0-alpha.4
+composer require particle-academy/prism-acp:0.1.0-alpha.5
 ```
 
 Requires PHP 8.2 or newer, `ext-ctype`, `ext-json`, `ext-mbstring`, Windows with the .NET Framework 4 C# compiler, and an installed,
@@ -37,6 +37,12 @@ The Claude CLI requests permission through the ACP client before every tool call
 allows the tool; cancellation, a missing handler, malformed replies and hook failures block it. Reasons accompany
 both allow and deny. This is a tool-approval mechanism, not an operating-system sandbox: a permitted command has
 the signed-in user's permissions. Use a trusted ACP client and working directory.
+
+With permission prompts enabled, a stable Claude Code version of at least 2.1.295 is required; the native test pin
+is 2.1.310. Prompts and EOF wait for its initialize version, and a missing or changed later system/init version
+closes the session. The native exec-form hook allows only its script's validated explicit allow, and blocks silent
+zero exits, invalid responses, crashes and timeouts. Its PHP child uses `-n` and fixed diagnostic settings, so hook
+execution does not load the application's ini files or require optional extensions.
 
 Codex uses `on-request` approval and its own sandbox default. Its five native command/file/permission approval
 families map to the choices shown by the ACP client; only an offered choice can allow. Cancellation and missing,
@@ -68,6 +74,19 @@ $served['closed']->await();
 Load your application's Composer autoloader before this example. `permissionPrompts` can instead list individual
 tool identifiers, such as `['Bash', 'Write']`. Omitting it leaves permission handling to Claude's own configuration;
 an embedding application must choose its policy deliberately. Explicit per-session MCP configuration is supported.
+
+The hook interpreter defaults to `PHP_BINARY` only when the embedding SAPI is `cli`. For CGI, FPM, phpdbg,
+CLI-server or another embedded SAPI, supply `phpBinary: 'C:/absolute/path/php.exe'` in trusted constructor options.
+An implicit PATH lookup is refused. The package probes that executable as a working PHP CLI under containment
+before creating the hook configuration. An explicit CGI/debugger executable is refused too. This changes the
+previous non-CLI fallback; it does not add Linux/macOS provider containment. The optional trusted
+`permissionTimeoutSeconds` ranges from 1 to 86400 (default 86400); the channel and native guard expire before the
+CLI's hook timeout. Both options survive `forSession()` and cannot be supplied through ACP.
+
+Concurrent Windows first launches publish digest-named supervisor generations before atomically replacing a small
+digest pointer. Every reader validates the pointer, filename and actual bytes. Existing generations remain available
+to sessions that selected them; a damaged cache is rebuilt once or refused. The cache filesystem must support hard
+links and atomic replacement; no uncontained fallback is offered.
 
 For Codex, use `CodexDriverOptions` and `CodexDriver` from `Prism\Acp\Codex` in the same factory, with
 `driverCapabilities: CodexDriver::CAPABILITIES`. The constructor also accepts trusted `approvalPolicy`, `sandbox`,

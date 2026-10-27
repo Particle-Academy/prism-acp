@@ -46,11 +46,9 @@ final class WindowsSupervisorBuild
     public static function executable(): string
     {
         $directory = self::directory();
-        $executable = $directory.'\\prism-acp-supervisor.exe';
-        $hashFile = $executable.'.sha256';
-        $state = self::verified($executable, $hashFile);
-        if ($state === 'ok') {
-            return $executable;
+        $state = self::verified($directory);
+        if ($state['state'] === 'ok') {
+            return $state['executable'];
         }
 
         $windows = getenv('SystemRoot') ?: (getenv('windir') ?: 'C:\\Windows');
@@ -88,32 +86,71 @@ final class WindowsSupervisorBuild
             throw new ProcessTreeException('cannot contain the provider: the supervisor was removed right after it was built (antivirus quarantine is the likely cause)');
         }
         $hash = (string) hash_file('sha256', $built);
-        // A stale or altered copy is replaced; a copy another process is running cannot be, and is checked below instead.
-        if ($state === 'mismatch') {
-            @unlink($executable);
-        }
-        if (@rename($built, $executable)) {
-            file_put_contents($hashFile, $hash);
-        } else {
+        $executable = $directory.'\\prism-acp-supervisor-'.$hash.'.exe';
+        $pending = $directory.'\\supervisor-'.$unique.'.sha256';
+        $publicationFailed = false;
+        try {
+            // Publish a complete inode exclusively; never overwrite a generation another process selected.
+            if (! @link($built, $executable) && (! is_file($executable) || ! hash_equals($hash, (string) hash_file('sha256', $executable)))) {
+                throw new ProcessTreeException('supervisor generation publication failed');
+            }
+            if (! hash_equals($hash, (string) hash_file('sha256', $executable))) {
+                throw new ProcessTreeException('supervisor generation verification failed');
+            }
+            $pointer = @fopen($pending, 'x');
+            if ($pointer === false) {
+                throw new ProcessTreeException('supervisor pointer creation failed');
+            }
+            try {
+                if (fwrite($pointer, $hash) !== strlen($hash)) {
+                    throw new ProcessTreeException('supervisor pointer write failed');
+                }
+            } finally {
+                fclose($pointer);
+            }
+            if (! @rename($pending, $directory.'\\prism-acp-supervisor.current.sha256')) {
+                throw new ProcessTreeException('supervisor pointer publication failed');
+            }
+        } catch (\Throwable) {
+            $publicationFailed = true; // A competing publisher is accepted only after independently verifying it.
+        } finally {
             @unlink($built);
+            if (is_file($pending)) {
+                @unlink($pending);
+            }
         }
-        $after = self::verified($executable, $hashFile);
-        if ($after === 'ok') {
-            return $executable;
+        $after = self::verified($directory);
+        if ($after['state'] === 'ok') {
+            return $after['executable'];
         }
-        throw new ProcessTreeException($after === 'mismatch'
-            ? 'cannot contain the provider: the supervisor does not match the hash recorded when it was built, and could not be replaced'
-            : 'cannot contain the provider: the supervisor is missing after it was built (antivirus quarantine is the likely cause)');
+        if ($publicationFailed) {
+            throw new ProcessTreeException('cannot contain the provider: the supervisor generation or atomic pointer could not be published; the cache filesystem must support hard links and atomic replacement');
+        }
+        throw new ProcessTreeException($after['state'] === 'mismatch'
+            ? 'cannot contain the provider: the supervisor does not match its recorded hash, and could not be replaced'
+            : 'cannot contain the provider: the supervisor is missing after it was built');
     }
 
-    /** @return 'ok'|'missing'|'mismatch' */
-    private static function verified(string $executable, string $hashFile): string
+    /** @return array{state: 'ok', executable: string}|array{state: 'missing'|'mismatch'} */
+    private static function verified(string $directory): array
     {
-        if (! is_file($executable) || ! is_file($hashFile)) {
-            return 'missing';
+        $pointer = $directory.'\\prism-acp-supervisor.current.sha256';
+        clearstatcache(true, $pointer);
+        if (! is_file($pointer)) {
+            return ['state' => 'missing'];
         }
-        $recorded = trim((string) file_get_contents($hashFile));
+        $size = @filesize($pointer);
+        $recorded = trim((string) @file_get_contents($pointer, false, null, 0, 81));
+        if ($size === false || $size > 80 || preg_match('/\A[0-9a-f]{64}\z/', $recorded) !== 1) {
+            return ['state' => 'mismatch'];
+        }
+        $executable = $directory.'\\prism-acp-supervisor-'.$recorded.'.exe';
+        clearstatcache(true, $executable);
+        if (! is_file($executable)) {
+            return ['state' => 'missing'];
+        }
 
-        return hash_equals($recorded, (string) hash_file('sha256', $executable)) ? 'ok' : 'mismatch';
+        return hash_equals($recorded, (string) hash_file('sha256', $executable))
+            ? ['state' => 'ok', 'executable' => $executable] : ['state' => 'mismatch'];
     }
 }

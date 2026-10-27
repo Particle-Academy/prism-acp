@@ -7,14 +7,14 @@ namespace Tests\Support;
 final class WindowsPermissions
 {
     /** @return array{code:int,evidence:string} */
-    public static function inspect(string $directory): array
+    public static function inspect(string $directory, bool $file = false): array
     {
         $template = <<<'PS'
         $ErrorActionPreference = 'Stop';
-        $acl = [System.IO.Directory]::GetAccessControl('FIXTURE_HOME');
+        $acl = [System.IO.FIXTURE_KIND]::GetAccessControl('FIXTURE_HOME');
         $rules = $acl.GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier]);
         $sid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value;
-        $ok = $acl.AreAccessRulesProtected -and $rules.Count -gt 0;
+        $ok = ($acl.AreAccessRulesProtected -or 'FIXTURE_KIND' -eq 'File') -and $rules.Count -gt 0;
         $evidence = "protected=$($acl.AreAccessRulesProtected); currentSid=$sid";
         foreach ($rule in $rules) {
             if ($rule.IdentityReference.Value -ne $sid -or $rule.AccessControlType -ne 'Allow') { $ok = $false }
@@ -24,7 +24,7 @@ final class WindowsPermissions
         if ($ok) { exit 0 } else { exit 1 }
         PS;
         // Query the OS ACL without importing PowerShell 7 modules into Windows PowerShell 5.
-        $command = str_replace('FIXTURE_HOME', str_replace("'", "''", $directory), $template);
+        $command = str_replace(['FIXTURE_HOME', 'FIXTURE_KIND'], [str_replace("'", "''", $directory), $file ? 'File' : 'Directory'], $template);
         $powershell = (getenv('SystemRoot') ?: 'C:\\Windows').'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
         $process = proc_open([$powershell, '-NoProfile', '-NonInteractive', '-Command', $command],
             [0 => ['file', 'NUL', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, options: ['bypass_shell' => true]);

@@ -30,7 +30,9 @@ final class ApprovalServer
 
     private ?int $acceptWatcher = null;
 
-    /** @var array<int, array{socket: resource, buffer: string, watcher: int|null}> */
+    private int $nextConnection = 1;
+
+    /** @var array<int, array{socket: resource, buffer: string, watcher: int|null, timer: int|null}> */
     private array $connections = [];
 
     /** @param \Closure(\stdClass): Deferred<mixed> $ask */
@@ -38,7 +40,9 @@ final class ApprovalServer
         private readonly string $address,
         private readonly \Closure $ask,
         private readonly Loop $loop,
+        private readonly int $timeoutSeconds = Approvals::WAIT_SECONDS,
     ) {
+        Approvals::waitSeconds($timeoutSeconds);
         $this->token = bin2hex(random_bytes(32));
     }
 
@@ -47,9 +51,9 @@ final class ApprovalServer
      *
      * @param  \Closure(\stdClass): Deferred<mixed>  $ask
      */
-    public static function forDirectory(string $directory, \Closure $ask, Loop $loop): self
+    public static function forDirectory(string $directory, \Closure $ask, Loop $loop, int $timeoutSeconds = Approvals::WAIT_SECONDS): self
     {
-        return new self(PHP_OS_FAMILY === 'Windows' ? 'tcp://127.0.0.1:0' : 'unix://'.$directory.'/approve.sock', $ask, $loop);
+        return new self(PHP_OS_FAMILY === 'Windows' ? 'tcp://127.0.0.1:0' : 'unix://'.$directory.'/approve.sock', $ask, $loop, $timeoutSeconds);
     }
 
     /**
@@ -99,9 +103,15 @@ final class ApprovalServer
             return;
         }
         stream_set_blocking($socket, false);
-        $key = (int) $socket;
-        $this->connections[$key] = ['socket' => $socket, 'buffer' => '', 'watcher' => null];
-        $this->connections[$key]['watcher'] = $this->loop->onReadable($socket, fn () => $this->read($key));
+        $key = $this->nextConnection++; // A late decision must never select a subsequently reused socket id.
+        $watcher = $this->loop->onReadable($socket, fn () => $this->read($key));
+        $timer = $this->loop->delay($this->timeoutSeconds, function () use ($key): void {
+            $connection = $this->connections[$key] ?? null;
+            if ($connection !== null) {
+                $this->answer($key, $connection['watcher'] === null ? '200' : '408', $connection['watcher'] === null ? PermissionOutcome::cancelled() : null);
+            }
+        });
+        $this->connections[$key] = ['socket' => $socket, 'buffer' => '', 'watcher' => $watcher, 'timer' => $timer];
     }
 
     private function read(int $key): void
@@ -183,6 +193,9 @@ final class ApprovalServer
         }
         if ($connection['watcher'] !== null) {
             $this->loop->cancel($connection['watcher']);
+        }
+        if ($connection['timer'] !== null) {
+            $this->loop->cancel($connection['timer']);
         }
         if (is_resource($connection['socket'])) {
             @fclose($connection['socket']);

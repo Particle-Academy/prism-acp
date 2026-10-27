@@ -67,7 +67,7 @@ while (($line = fgets(STDIN)) !== false) {
         $request = $frame['request'] ?? [];
         $subtype = $request['subtype'] ?? null;
         if ($subtype === 'initialize') {
-            $emit(['type' => 'control_response', 'response' => ['subtype' => 'success', 'request_id' => $frame['request_id'], 'response' => ['models' => [
+            $emit(['type' => 'control_response', 'response' => ['subtype' => 'success', 'request_id' => $frame['request_id'], 'response' => ['claude_code_version' => '2.1.310', 'models' => [
                 ['value' => 'default', 'resolvedModel' => 'claude-opus-5-5', 'displayName' => "Default \e[1m(recommended)", 'description' => 'Opus'],
                 ['value' => 'haiku', 'displayName' => 'Haiku', 'description' => ' fast '],
                 ['value' => '--dangerously-skip-permissions', 'displayName' => 'not a model'],
@@ -89,7 +89,7 @@ while (($line = fgets(STDIN)) !== false) {
     $turn++;
     if (! $started) {
         $started = true;
-        $emit(['type' => 'system', 'subtype' => 'init', 'session_id' => $session, 'model' => $option('--model') ?? 'claude-fake', 'slash_commands' => ['/compact'], 'skills' => []]);
+        $emit(['type' => 'system', 'subtype' => 'init', 'claude_code_version' => '2.1.310', 'session_id' => $session, 'model' => $option('--model') ?? 'claude-fake', 'slash_commands' => ['/compact'], 'skills' => []]);
     }
     $content = $frame['message']['content'] ?? [];
     $said = implode(' ', array_map(fn ($block) => $block['text'] ?? ('['.($block['type'] ?? '?').']'), is_array($content) ? $content : []));
@@ -121,8 +121,8 @@ while (($line = fgets(STDIN)) !== false) {
 
             continue;
         }
-        // As Claude runs a command hook: through a shell, the hook input on stdin.
-        $process = proc_open($hook['hooks'][0]['command'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        // Exec-form hook: command and args are data, never shell source.
+        $process = proc_open([$hook['hooks'][0]['command'], ...$hook['hooks'][0]['args']], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, options: ['bypass_shell' => true]);
         fwrite($pipes[0], json_encode(['session_id' => $session, 'tool_name' => $tool, 'tool_input' => ['command' => 'rm -rf /tmp/x'], 'tool_use_id' => "toolu_{$turn}", 'cwd' => getcwd()]));
         fclose($pipes[0]);
         $out = stream_get_contents($pipes[1]);

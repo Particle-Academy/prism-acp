@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.0-alpha.5
+
+BREAKING CHANGE: permission prompts from non-CLI SAPIs now require an explicit absolute trusted `phpBinary`
+verified as a PHP CLI. The implicit `php` lookup on PATH and implicit phpdbg/CLI-server selection are removed.
+Claude permission prompts require a stable CLI version of at least 2.1.295; 2.1.310 is the native regression pin.
+
+- Use an exec-form native approval adapter and internal explicit-allow status42. Silent zero exits, malformed
+  responses, runtime failures and timeouts block the call. Hook paths are arguments, and inherited PHP ini files
+  cannot inject hook code. Permission-channel deadlines deny late decisions and release their connections.
+- Hold prompts and EOF until the initialize version is verified; a missing/changed later system/init version
+  refuses the session. Trusted timeout/interpreter policy survives `forSession()` and is not ACP configuration.
+- Publish the Windows supervisor and approval adapter as independently hash-verified immutable generations with
+  an atomic digest pointer. Preserve private cache ACL inheritance and bad-cache/no-compiler refusal.
+- Add actual native-Claude approval controls, CLI/CGI/phpdbg/FPM runtime measurements, and parallel cold-cache
+  comparisons against the released old cache producer. Remaining port gaps and Windows-only containment remain.
+
 ## 0.1.0-alpha.4
 
 Additive host-configured API-key mode for both Windows drivers; subscription authentication remains the default.

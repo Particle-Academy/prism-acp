@@ -126,6 +126,21 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
 
     private ?ApprovalServer $approvals = null;
 
+    private ?string $approvalVersion = null;
+
+    private ?string $approvalInitVersion = null;
+
+    private ?string $approvalFailure = null;
+
+    private bool $approvalStopped = false;
+
+    /** @var list<string> */
+    private array $heldPrompts = [];
+
+    private int $heldPromptBytes = 0;
+
+    private bool $heldEndInput = false;
+
     /** @var list<string> */
     private array $withheld = [];
 
@@ -285,6 +300,13 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
             return;
         }
 
+        $tools = $this->options->permissionPrompts;
+        $phpRuntime = null;
+        if ($tools !== null) {
+            Approvals::waitSeconds($this->options->permissionTimeoutSeconds);
+            $phpRuntime = PhpRuntime::resolve($this->options->phpBinary);
+        }
+
         // The CLI finds the user's own login through these, so they are allowed explicitly rather than inherited.
         $parentEnv = $this->options->parentEnv ?? getenv();
         $keyed = ApiKeyHome::check('claude', $this->options->credentials, $parentEnv);
@@ -300,7 +322,6 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
                 self::writeNew($this->mcpConfigPath, Json::encode(McpServers::claudeConfig($this->options->mcpServers)));
             }
             $settingsPath = null;
-            $tools = $this->options->permissionPrompts;
             if ($tools !== null || $this->disabledMcpServers !== []) {
                 $directory = PrivateDirectory::create('prism-acp-approve-');
                 $this->approvalDirectory = $directory;
@@ -310,7 +331,7 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
                 if ($tools !== null) {
                     self::writeNew($hookPath, Approvals::HOOK_SCRIPT);
                     $this->approvalFiles[] = $hookPath;
-                    $settings = Approvals::settings(self::phpBinary($this->options->phpBinary), $hookPath, $tools);
+                    $settings = Approvals::settings((string) $phpRuntime, $hookPath, $tools, $this->options->permissionTimeoutSeconds);
                 }
                 if ($this->disabledMcpServers !== []) {
                     $settings['deniedMcpServers'] = array_map(static fn (string $name): array => ['serverName' => $name], $this->disabledMcpServers);
@@ -321,14 +342,22 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
             if ($tools !== null) {
                 $ask = $this->events->onRequestPermission;
                 $this->approvals = ApprovalServer::forDirectory($directory, function (\stdClass $input) use ($ask): Deferred {
-                    if ($ask !== null) {
-                        return $ask(Approvals::permissionRequestFor($input));
+                    if ($ask !== null && $this->approvalVersion !== null && $this->approvalFailure === null && ! $this->approvalStopped) {
+                        $guarded = new Deferred($this->loop);
+                        $ask(Approvals::permissionRequestFor($input))->then(
+                            function (mixed $outcome) use ($guarded): void {
+                                $guarded->resolve($this->approvalFailure === null && ! $this->approvalStopped ? $outcome : PermissionOutcome::cancelled());
+                            },
+                            fn (\Throwable $error) => $guarded->resolve(PermissionOutcome::cancelled()),
+                        );
+
+                        return $guarded;
                     }
                     $nobody = new Deferred($this->loop);
                     $nobody->resolve(PermissionOutcome::cancelled());
 
                     return $nobody;
-                }, $this->loop);
+                }, $this->loop, $this->options->permissionTimeoutSeconds);
                 $channel = $this->approvals->listen();
                 // The token travels in the environment, never in argv.
                 $env['PRISM_ACP_APPROVAL_SOCKET'] = $channel['socket'];
@@ -363,17 +392,66 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         $models = new Deferred($this->loop);
         $this->control(['subtype' => 'initialize'])->then(
             function (mixed $response) use ($models): void {
-                // The control_response's `response` is the envelope ({ subtype, request_id, response }).
-                if (Js::get($response, 'subtype') !== 'success') {
-                    $models->reject(new ModelListError('the Claude CLI refused the initialize request'));
-
-                    return;
+                try {
+                    if (Js::get($response, 'subtype') !== 'success') {
+                        throw new ModelListError('the Claude CLI refused the initialize request');
+                    }
+                    $available = Models::claudeModelsOf(Js::get($response, 'response'));
+                    if ($this->options->permissionPrompts !== null) {
+                        $version = Approvals::cliVersion(Js::get(Js::get($response, 'response'), 'claude_code_version'));
+                        if ($version === null || ($this->approvalInitVersion !== null && $this->approvalInitVersion !== $version)) {
+                            throw new ModelListError('Claude permission prompts require a stable initialize version of 2.1.295 or later, consistent with system/init');
+                        }
+                        $this->approvalVersion = $version;
+                        if ($this->approvalFailure === null && ! $this->approvalStopped) {
+                            $held = $this->heldPrompts;
+                            $this->heldPrompts = [];
+                            $this->heldPromptBytes = 0;
+                            foreach ($held as $line) {
+                                $this->provider?->provider->write($line);
+                            }
+                            if ($this->heldEndInput) {
+                                $this->provider?->provider->closeInput();
+                            }
+                        }
+                    }
+                    $models->resolve($available);
+                } catch (\Throwable $error) {
+                    if ($this->options->permissionPrompts !== null) {
+                        $this->refuseApprovals('Claude permission prompts refused: initialize failed or reported an unsupported version');
+                    }
+                    $models->reject($error);
                 }
-                $models->resolve(Models::claudeModelsOf(Js::get($response, 'response')));
             },
-            fn (\Throwable $error) => $models->reject($error),
+            function (\Throwable $error) use ($models): void {
+                if ($this->options->permissionPrompts !== null) {
+                    $this->refuseApprovals('Claude permission prompts refused: initialize failed or timed out');
+                }
+                $models->reject($error);
+            },
         );
         $this->models = $models;
+    }
+
+    /** Stop before any more hook decisions or held prompts can be released. */
+    private function refuseApprovals(string $reason): void
+    {
+        if ($this->approvalFailure !== null) {
+            return;
+        }
+        $this->approvalFailure = $reason;
+        $this->approvalStopped = true;
+        $pending = $this->turnsInFlight;
+        $this->heldPrompts = [];
+        $this->heldPromptBytes = 0;
+        $this->turnsInFlight = 0;
+        $this->pendingOutcome = null;
+        $this->approvals?->close();
+        $this->provider?->stop(0);
+        $this->problem($reason, null);
+        for ($i = 0; $i < $pending; $i++) {
+            $this->events->onTurnEnd?->__invoke(new TurnOutcome('refusal', true, $reason));
+        }
     }
 
     /**
@@ -388,7 +466,19 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         if ($this->provider === null || $this->provider->isClosed()) {
             throw new \RuntimeException('driver is not started, or its stdin has closed');
         }
-        $this->provider->provider->write($line);
+        if ($this->approvalFailure !== null) {
+            throw new \RuntimeException($this->approvalFailure);
+        }
+        if ($this->options->permissionPrompts !== null && $this->approvalVersion === null) {
+            if ($this->approvalStopped || count($this->heldPrompts) >= 32 || $this->heldPromptBytes + strlen($line) > 1_000_000) {
+                $this->refuseApprovals('Claude permission-hook initialization stopped or exceeded its pending prompt bound');
+                throw new \RuntimeException('Claude permission-hook initialization is not ready');
+            }
+            $this->heldPrompts[] = $line;
+            $this->heldPromptBytes += strlen($line);
+        } else {
+            $this->provider->provider->write($line);
+        }
         $this->turnsInFlight++;
     }
 
@@ -461,17 +551,28 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
     /** Close stdin, which tells the CLI no more turns are coming. */
     public function endInput(): void
     {
+        if ($this->options->permissionPrompts !== null && $this->approvalVersion === null && ! $this->approvalStopped) {
+            $this->heldEndInput = true;
+
+            return;
+        }
         $this->provider?->provider->closeInput();
     }
 
     /** End the CLI and every process it started, now. */
     public function kill(): void
     {
+        $this->approvalStopped = true;
+        $this->heldPrompts = [];
+        $this->heldPromptBytes = 0;
         $this->provider?->kill();
     }
 
     public function stop(int $graceMs = 5000): Deferred
     {
+        $this->approvalStopped = true;
+        $this->heldPrompts = [];
+        $this->heldPromptBytes = 0;
         if ($this->provider === null) {
             $done = new Deferred($this->loop);
             $done->resolve(new StopVerdict(true, true, 0, true));
@@ -530,6 +631,10 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
 
     private function onClosed(): void
     {
+        if ($this->options->permissionPrompts !== null && $this->approvalVersion === null) {
+            $this->refuseApprovals('Claude exited before permission-hook initialization completed');
+        }
+        $this->approvalStopped = true;
         foreach (array_keys($this->controlWaiters) as $id) {
             $this->settleControl((string) $id, null, new ModelListError('the Claude CLI exited before answering'));
         }
@@ -557,6 +662,18 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
                 continue;
             }
             $value = $frame->value;
+            if ($this->options->permissionPrompts !== null && Js::get($value, 'type') === 'system' && Js::get($value, 'subtype') === 'init') {
+                $version = Approvals::cliVersion(Js::get($value, 'claude_code_version'));
+                if ($version === null || ($this->approvalVersion !== null && $version !== $this->approvalVersion)) {
+                    $this->refuseApprovals('Claude system/init omitted or changed the validated permission-hook version');
+
+                    continue;
+                }
+                $this->approvalInitVersion = $version;
+            }
+            if ($this->approvalFailure !== null) {
+                continue;
+            }
             $cliSessionId = self::cliSessionIdOf($value);
             if (Js::get($value, 'type') === 'system' && Js::get($value, 'subtype') === 'init'
                 && Js::has($value, 'session_id') && ! SessionId::isValidCliSessionId($cliSessionId)) {
@@ -690,19 +807,6 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
 
         // Prompt::blocks admitted only a text resource here.
         return ['type' => 'text', 'text' => Prompt::fileAsText($resource instanceof \stdClass ? $resource : new \stdClass)];
-    }
-
-    /** The PHP CLI that runs the permission hook: the one given, else this one when it is a CLI, else `php` on PATH. */
-    private static function phpBinary(?string $given): string
-    {
-        if ($given !== null && $given !== '') {
-            return $given;
-        }
-        if (in_array(PHP_SAPI, ['cli', 'phpdbg', 'cli-server'], true)) {
-            return PHP_BINARY;
-        }
-
-        return 'php';
     }
 
     /** Create a file that must not exist yet, readable by this user only. */
