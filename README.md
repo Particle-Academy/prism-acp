@@ -172,7 +172,13 @@ fixtures from its corresponding source commit, hostile mutations and 648 reader 
 requests, permissions and failures against that reference. CI regenerates these expectations and fails on drift.
 Codex scenarios exercise the published driver's actual state machine through synthetic protocol frames, including
 outbound RPC, updates, approvals, failures and MCP policy. They are synthetic scenarios, not native turn captures.
-The reference version is explicit; this is not a claim of complete TypeScript feature parity.
+**PHP behind TS: PARTIAL (6 contracts missing).** The executed golden baseline remains 0.25.1; reference releases
+through 0.32.0 have been reviewed. Missing contracts tracked by G-141 are 0.26 readRateLimits, 0.27 MCP server status,
+0.28 AppContainer LOCAL, 0.29 nativeTools, 0.31 replay markers/opt-out, and G-140's 0.32 restricted startup flags.
+The currency watchdog executes PHP API/cache-reader probes, refuses an unreviewed newer published version, and
+refuses either a missing contract absent from this list or a newly exposed contract still listed as missing.
+These conservative inventory probes require review of surface changes; native safety and reference conformance
+are checked separately. The reviewed version advances only in a reviewed change, never automatically.
 
 Windows CI runs fake-provider protocol and real process-tree tests, including a host hard kill while relay input
 stays open. Ubuntu checks the portable primitives and verifies that unsupported containment refuses before spawn.

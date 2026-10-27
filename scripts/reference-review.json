@@ -1,0 +1,12 @@
+{
+  "goldenBaseline": "0.25.1",
+  "reviewedLatest": "0.32.0",
+  "knownMissing": [
+    {"contract": "readRateLimits", "since": "0.26.0", "gap": "G-141"},
+    {"contract": "mcpServerStatus", "since": "0.27.0", "gap": "G-141"},
+    {"contract": "appContainerLocal", "since": "0.28.0", "gap": "G-141"},
+    {"contract": "nativeTools", "since": "0.29.0", "gap": "G-141"},
+    {"contract": "replayMarkersAndOptOut", "since": "0.31.0", "gap": "G-141"},
+    {"contract": "restrictedStartupFlags", "since": "0.32.0", "gap": "G-141 (G-140)"}
+  ]
+}

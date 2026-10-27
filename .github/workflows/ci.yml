@@ -127,7 +127,9 @@ jobs:
           git diff --exit-code -- tests/fixtures
           test -z "$(git ls-files --others --exclude-standard -- tests/fixtures)"
       - name: Report newer reference releases
-        run: node scripts/reference-currency.mjs
+        run: |
+          node --test scripts/reference-review.test.mjs
+          node scripts/reference-currency.mjs
 
   native-approval:
     name: Native Claude approval (Windows, PHP 8.4)
@@ -211,8 +213,8 @@ jobs:
           if-no-files-found: error
 
   fpm-sapi:
-    name: Actual FPM runtime selection
-    runs-on: ubuntu-latest
+    name: Actual FPM runtime selection (Ubuntu 24.04, PHP 8.3)
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
@@ -229,21 +231,22 @@ jobs:
       - run: node .third-party-allowlist/third-party/check.mjs --repo .
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          php-version: '8.3'
           extensions: mbstring
           coverage: none
           tools: composer:v2
       - run: composer update --no-scripts --prefer-dist --no-interaction --no-progress
-      - name: Extract a matching FPM test executable without installing a system service
+      - name: Extract the distribution's FPM executable without installing a system service
         run: |
+          sudo apt-get update
           mkdir .fpm-runtime
           cd .fpm-runtime
-          apt-get download php8.4-fpm
+          apt-get download php8.3-fpm
           dpkg-deb -x ./*.deb image
       - name: Private Unix socket, one owned FPM pool, no web server or provider launch
         run: |
           mkdir .approval-evidence
-          node scripts/check-fpm-sapi.mjs .fpm-runtime/image/usr/sbin/php-fpm8.4 .approval-evidence/fpm.json
+          node scripts/check-fpm-sapi.mjs .fpm-runtime/image/usr/sbin/php-fpm8.3 .approval-evidence/fpm.json
       - name: Preserve FPM measurement
         if: always()
         uses: actions/upload-artifact@v4
