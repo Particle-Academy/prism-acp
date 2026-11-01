@@ -5,6 +5,7 @@ export const contracts = Object.freeze({
   readRateLimits: '0.26.0', mcpServerStatus: '0.27.0', appContainerLocal: '0.28.0',
   nativeTools: '0.29.0', approvalGuard: '0.30.0', replayMarkersAndOptOut: '0.31.0',
   restrictedStartupFlags: '0.32.0', supervisorGenerations: '0.32.0',
+  claudeAppMcpOnly: '0.33.0',
 });
 
 function core(version) {

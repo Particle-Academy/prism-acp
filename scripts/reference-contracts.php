@@ -17,6 +17,7 @@ use Prism\Acp\Agent\DriverEvents;
 use Prism\Acp\Async\Loop;
 use Prism\Acp\Claude\Approvals;
 use Prism\Acp\Claude\ClaudeDriver;
+use Prism\Acp\Claude\ClaudeDriverOptions;
 use Prism\Acp\Codex\CodexDriver;
 use Prism\Acp\Codex\CodexDriverOptions;
 use Prism\Acp\Codex\CodexTransportOptions;
@@ -92,4 +93,5 @@ echo json_encode([
     'replayMarkersAndOptOut' => property_exists(CodexDriverOptions::class, 'replayHistory') || in_array('particle.academy/replay', (new ReflectionClass(Meta::class))->getConstants(), true),
     'restrictedStartupFlags' => $startupFlags,
     'supervisorGenerations' => $generations,
+    'claudeAppMcpOnly' => property_exists(ClaudeDriverOptions::class, 'nativeTools'),
 ], JSON_THROW_ON_ERROR)."\n";
