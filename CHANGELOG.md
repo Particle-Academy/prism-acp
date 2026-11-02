@@ -12,7 +12,9 @@
 - Protect new homes, independently verify them, and report failed removal as a typed `cleanup_failed` error.
   Retry never trusts a residual home merely because it exists. Stored file contents are never opened, read, copied or hashed.
 - Retain temporary Claude configuration and approval-directory cleanup state after a failed removal. After process stop,
-  make one bounded retry; an exhausted cleanup reports a terminal protocol problem without changing the process-stop verdict.
+  make a deferred retry. On Windows only known, unstat-able approval entries permit non-blocking retries within a fixed
+  three-second ceiling; unknown entries fail immediately. Exhaustion reports a terminal protocol problem without changing
+  the process-stop verdict or resetting the budget on repeated stops.
 - Bound metadata verification to depth 16, 16,384 descendants and 30 seconds, with explicit safe limit reasons. Symlinks
   and reparse points refuse the entire tree. See [credential-home protection](docs/credential-home-protection.md) for
   operator limits and manual permission repair. Subscription authentication remains the default.

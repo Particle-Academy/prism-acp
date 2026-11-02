@@ -10,7 +10,7 @@ On POSIX, the effective user must own every entry; no entry may grant group/othe
 
 Existing directories are inspected without rewriting their permissions. New homes are protected and independently verified before admission. Failed cleanup of a newly created directory raises DirectoryCleanupException with kind cleanup_failed, rather than promoting the residual directory into a trusted home on retry. Existing homes are never removed.
 
-Temporary Claude MCP configuration and permission-prompt directories retain their cleanup state until removal succeeds. A failed removal gets one deferred retry after stop; exhaustion emits a terminal protocol problem with a fixed path-free message. The process-stop verdict continues to describe process containment, separately from directory cleanup. No retry widens permissions or removes an existing credential home.
+Temporary Claude MCP configuration and permission-prompt directories retain their cleanup state until removal succeeds. A failed removal gets a deferred retry after stop. On Windows, only remaining known `approve.php` or `settings.json` entries with unavailable stat metadata permit further event-loop retries, with a three-second ceiling measured from the initial attempt. An unknown entry or any other failure stops that wait immediately. Exhaustion emits a terminal protocol problem with a fixed path-free message; repeated stop calls do not reset the budget. The process-stop verdict continues to describe process containment separately from directory cleanup. No retry widens permissions, recursively deletes entries or removes an existing credential home.
 
 ## Fixed scan limits
 

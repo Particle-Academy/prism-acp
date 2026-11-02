@@ -768,7 +768,7 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
     }
 
     /**
-     * One initial attempt and at most one deferred retry; never widen permissions or discard failed cleanup state.
+     * Retry known Windows pending-deletion entries for at most three seconds, without blocking the loop.
      *
      * @return Deferred<mixed>
      */
@@ -778,23 +778,82 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
             return $this->cleanup;
         }
         $done = $this->cleanup = new Deferred($this->loop);
+        $deadline = microtime(true) + 3.0;
         $this->removeMcpConfig(false);
         $this->removeApprovals(false);
         if ($this->mcpConfigDirectory === null && $this->approvalDirectory === null) {
             $done->resolve();
         } else {
-            $this->loop->defer(function () use ($done): void {
-                try {
-                    $this->removeMcpConfig();
-                    $this->removeApprovals();
-                    $done->resolve();
-                } catch (\Throwable $error) {
-                    $done->reject($error);
-                }
-            });
+            $this->loop->defer(fn () => $this->retryCleanup($done, $deadline));
         }
 
         return $done;
+    }
+
+    /** @param Deferred<mixed> $done */
+    private function retryCleanup(Deferred $done, float $deadline): void
+    {
+        try {
+            $this->removeMcpConfig(false);
+            $this->removeApprovals(false);
+            if ($this->mcpConfigDirectory === null && $this->approvalDirectory === null) {
+                $done->resolve();
+
+                return;
+            }
+            if (microtime(true) < $deadline && $this->pendingApprovalDeletion()) {
+                $this->loop->delay(min(0.05, max(0.0, $deadline - microtime(true))), fn () => $this->retryCleanup($done, $deadline));
+
+                return;
+            }
+            if ($this->mcpConfigDirectory !== null) {
+                $this->problem('failed to remove temporary Claude MCP configuration', false);
+            }
+            if ($this->approvalDirectory !== null) {
+                $this->problem('failed to remove the temporary Claude permission-prompt directory', false);
+            }
+            $done->resolve();
+        } catch (\Throwable $error) {
+            $done->reject($error);
+        }
+    }
+
+    /** A narrow metadata signature; never delete unknown entries or follow links. */
+    private function pendingApprovalDeletion(): bool
+    {
+        $directory = $this->approvalDirectory;
+        if (PHP_OS_FAMILY !== 'Windows' || $this->mcpConfigDirectory !== null || $directory === null) {
+            return false;
+        }
+        clearstatcache(true, $directory);
+        if (is_link($directory)) {
+            return false;
+        }
+        $entries = @opendir($directory);
+        if ($entries === false) {
+            return false;
+        }
+        $pending = false;
+        try {
+            while (($name = readdir($entries)) !== false) {
+                if ($name === '.' || $name === '..') {
+                    continue;
+                }
+                $path = $directory.DIRECTORY_SEPARATOR.$name;
+                if (! in_array($name, ['approve.php', 'settings.json'], true) || ! in_array($path, $this->approvalFiles, true)) {
+                    return false;
+                }
+                clearstatcache(true, $path);
+                if (is_link($path) || @lstat($path) !== false) {
+                    return false;
+                }
+                $pending = true;
+            }
+        } finally {
+            closedir($entries);
+        }
+
+        return $pending;
     }
 
     private function removeMcpConfig(bool $reportFailure = true): void
