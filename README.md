@@ -144,7 +144,7 @@ Symlinks/reparse points and unverifiable protection are refused. Existing homes
 are never silently chmodded or re-ACL'd. Restore those permissions, or choose a new app-owned home, before retrying.
 Protection is checked again when handing the key or home to the provider. A failed new-directory cleanup raises a
 typed DirectoryCleanupException with kind cleanup_failed; no path, key or unsafe previous exception is attached.
-The fixed verification bounds are depth 16, 65,536 descendants and 30 seconds. `DirectoryProtectionException` reports an
+The fixed verification bounds are depth 16, 16,384 descendants and 30 seconds. `DirectoryProtectionException` reports an
 explicit `depth_limit`, `entry_limit` or `time_limit` reason when a bound is hit. See [credential-home protection](docs/credential-home-protection.md)
 for the metadata policy and manual chmod/icacls repair commands.
 Use the same protected home to resume its sessions. Separate homes have separate

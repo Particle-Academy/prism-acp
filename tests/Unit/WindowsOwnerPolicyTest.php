@@ -7,7 +7,7 @@ use Prism\Acp\Process\WindowsCommand;
 use Prism\Acp\Process\WindowsProviderProcess;
 use Prism\Acp\Support\PrivateDirectory;
 
-it('evaluates natural Administrators and other foreign ownership under actual Windows tokens', function (string $mode): void {
+it('evaluates natural Administrators and foreign ownership with actual elevated or linked filtered tokens', function (string $mode): void {
     if (PHP_OS_FAMILY !== 'Windows') {
         $this->markTestSkipped('native Windows access tokens only');
     }
@@ -66,11 +66,11 @@ it('evaluates natural Administrators and other foreign ownership under actual Wi
         $token = $rows[0];
         if (! $token['available']) {
             expect(count($rows))->toBe(1);
-            expect($token['reason'])->toBeIn(['requires_elevated_administrator', 'restore_privilege_unavailable', 'process_token_privilege_unavailable']);
+            expect($token['reason'])->toBeIn(['requires_elevated_administrator', 'restore_privilege_unavailable', 'process_token_privilege_unavailable', 'linked_filtered_token_unavailable', 'linked_filtered_token_state_unavailable']);
             $unavailable = $token['reason'];
         } else {
             expect(count($rows))->toBe(2);
-            expect($token)->toBe(['available' => true, 'elevated' => $mode === 'elevated', 'administratorEnabled' => $mode === 'elevated', 'naturalAdministratorOwner' => true]);
+            expect($token)->toBe(['available' => true, 'elevated' => $mode === 'elevated', 'administratorEnabled' => $mode === 'elevated', 'naturalAdministratorOwner' => true, 'tokenSource' => $mode === 'elevated' ? 'process' : 'linked_filtered']);
             expect($rows[1])->toBe(['ownerPolicy' => ['user-home' => true, 'admin-home' => $mode === 'elevated', 'foreign-home' => false], 'credentialContentsAccessed' => false]);
             echo json_encode(['nativeOwnerToken' => $token, 'ownerPolicy' => $rows[1]['ownerPolicy']], JSON_THROW_ON_ERROR)."\n";
         }

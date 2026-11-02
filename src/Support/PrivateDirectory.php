@@ -15,7 +15,7 @@ final class PrivateDirectory
 {
     private const MAX_DEPTH = 16;
 
-    private const MAX_ENTRIES = 65536;
+    private const MAX_ENTRIES = 16384;
 
     private const VERIFY_SECONDS = 30;
 

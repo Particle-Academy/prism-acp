@@ -14,7 +14,7 @@ Temporary Claude MCP configuration and permission-prompt directories retain thei
 
 ## Fixed scan limits
 
-Verification permits at most 65,536 descendants and depth 16, with the home at depth 0. It has a 30-second budget per verification. A limit or failed metadata query refuses the home; no unexamined entry becomes trusted. `DirectoryProtectionException` has kind `unsafe_directory` and a safe reason: `permissions`, `depth_limit`, `entry_limit` or `time_limit`. Its message identifies a limit hit. No path, key, diagnostic body or previous exception is included.
+Verification permits at most 16,384 descendants and depth 16, with the home at depth 0. It has a 30-second budget per verification. A limit or failed metadata query refuses the home; no unexamined entry becomes trusted. `DirectoryProtectionException` has kind `unsafe_directory` and a safe reason: `permissions`, `depth_limit`, `entry_limit` or `time_limit`. Its message identifies a limit hit. Entry-limit refusals name the 16,384-entry limit and the remedy: prune old app-owned session/log files, or use a fresh app-owned home. No path, key, diagnostic body or previous exception is included.
 
 Session transcripts, logs and caches can grow. These limits are security bounds, not a guarantee that every long-lived home will fit or complete within the budget. On limit refusal, move app-owned old session history according to the app's retention policy, or select a fresh dedicated home. The library changes no provider retention setting and deletes no history.
 

@@ -85,15 +85,18 @@ it('accepts the explicitly approved privileged Windows allow principals on an ow
     }
 });
 
-it('admits65536 descendants and refuses the next with an explicit entry-limit remedy', function (): void {
+it('admits16384 descendants and refuses the next with an explicit entry-limit remedy', function (): void {
     $tree = new CredentialTree;
     try {
-        for ($i = 0; $i < 65536; $i++) {
+        for ($i = 0; $i < 16384; $i++) {
             $tree->emptyFile('empty-count-marker-'.$i);
         }
+        $started = microtime(true);
         PrivateDirectory::assertProtected($tree->home);
+        $acceptedMilliseconds = (int) round((microtime(true) - $started) * 1000);
         $tree->emptyFile('empty-count-marker-over-limit');
         $caught = null;
+        $started = microtime(true);
         try {
             ApiKeyHome::check('codex', new ProviderCredentials('apiKey', 'owned-argument-key', $tree->home), []);
         } catch (DirectoryProtectionException $error) {
@@ -101,7 +104,8 @@ it('admits65536 descendants and refuses the next with an explicit entry-limit re
         }
         expect($caught)->toBeInstanceOf(DirectoryProtectionException::class)
             ->and($caught->kind)->toBe('unsafe_directory')->and($caught->reason)->toBe('entry_limit')
-            ->and($caught->getMessage())->toContain('entry count limit')->not->toContain($tree->home);
+            ->and($caught->getMessage())->toContain('entry count limit')->toContain('16,384')->toContain('Prune old app-owned session/log files')->not->toContain($tree->home);
+        echo json_encode(['nativeDirectoryEntryBoundary' => ['acceptedEntries' => 16384, 'acceptedMilliseconds' => $acceptedMilliseconds, 'refusedEntries' => 16385, 'refusedReason' => $caught->reason, 'refusedMilliseconds' => (int) round((microtime(true) - $started) * 1000)]], JSON_THROW_ON_ERROR)."\n";
     } finally {
         $tree->remove();
     }

@@ -13,7 +13,7 @@
   Retry never trusts a residual home merely because it exists. Stored file contents are never opened, read, copied or hashed.
 - Retain temporary Claude configuration and approval-directory cleanup state after a failed removal. After process stop,
   make one bounded retry; an exhausted cleanup reports a terminal protocol problem without changing the process-stop verdict.
-- Bound metadata verification to depth 16, 65,536 descendants and 30 seconds, with explicit safe limit reasons. Symlinks
+- Bound metadata verification to depth 16, 16,384 descendants and 30 seconds, with explicit safe limit reasons. Symlinks
   and reparse points refuse the entire tree. See [credential-home protection](docs/credential-home-protection.md) for
   operator limits and manual permission repair. Subscription authentication remains the default.
 
