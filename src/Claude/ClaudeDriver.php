@@ -30,6 +30,8 @@ use Prism\Acp\Process\ProviderOnLoop;
 use Prism\Acp\Process\StopVerdict;
 use Prism\Acp\Prompt\Prompt;
 use Prism\Acp\SessionId;
+use Prism\Acp\Support\DirectoryCleanupException;
+use Prism\Acp\Support\DirectoryProtectionException;
 use Prism\Acp\Support\Js;
 use Prism\Acp\Support\PrivateDirectory;
 use Prism\Acp\Support\Utf8Stream;
@@ -363,6 +365,8 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
                 $env['PRISM_ACP_APPROVAL_SOCKET'] = $channel['socket'];
                 $env['PRISM_ACP_APPROVAL_TOKEN'] = $channel['token'];
             }
+            // Configuration setup can take time. Recheck at the actual provider handoff.
+            $env = array_replace($env, $keyed?->environment('claude') ?? []);
             $process = Provider::launch(
                 $this->options->binary,
                 [...$this->options->binaryArgs, ...self::args($this->options, $this->mcpConfigPath, $settingsPath)],
@@ -373,7 +377,7 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
             $this->removeMcpConfig();
             $this->removeApprovals();
             // Its message names no path, and says why the CLI could not be run.
-            if ($cause instanceof ProcessTreeException) {
+            if ($cause instanceof ProcessTreeException || $cause instanceof DirectoryProtectionException || $cause instanceof DirectoryCleanupException) {
                 throw $cause;
             }
 

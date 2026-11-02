@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Prism\Acp\Codex;
 
 use Prism\Acp\JsonRpc\RpcError;
+use Prism\Acp\Support\DirectoryCleanupException;
+use Prism\Acp\Support\DirectoryProtectionException;
 use Prism\Acp\Support\Js;
 use Prism\Acp\Support\Undefined;
 use Prism\Acp\Text;
@@ -60,6 +62,10 @@ final class CodexPayload
 
     public static function safeError(string $prefix, \Throwable $cause): string
     {
+        if ($cause instanceof DirectoryProtectionException || $cause instanceof DirectoryCleanupException) {
+            // Both final types construct fixed structural messages, without a path or credential.
+            return $prefix.' ('.$cause->kind.'): '.$cause->getMessage();
+        }
         if ($cause instanceof RpcError) {
             $whitespace = '/[\x09-\x0D\x20\x{00A0}\x{1680}\x{2000}-\x{200A}\x{2028}\x{2029}\x{202F}\x{205F}\x{3000}\x{FEFF}]+/u';
             $message = Js::slice(Js::trim((string) preg_replace($whitespace, ' ', Text::stripAnsiControlSequences($cause->getMessage())['text'])), 300);
