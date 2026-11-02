@@ -2,13 +2,15 @@
 
 Use a dedicated app-owned home for API-key mode. Admission checks the home and every descendant's ownership, permissions and file type. A later key/environment handoff checks them again. The verifier enumerates directory metadata and queries ACLs or lstat; it never opens, reads, copies or hashes stored file contents.
 
-On Windows, every entry must be owned by the current process SID. Allow ACEs may name that user, SYSTEM or Administrators. The root needs protected inheritance and current-user FullControl. Descendants may inherit private permissions or have private explicit ACLs. A protected parent alone is insufficient: an explicit permissive descendant ACL can still grant access under Windows bypass-traverse behavior.
+On Windows, every entry must be owned by the current process SID, or by Administrators when the process has an elevated token with that group enabled. Allow ACEs may name the current user, SYSTEM or Administrators. The root needs protected inheritance and current-user FullControl. Descendants may inherit private permissions or have private explicit ACLs. A protected parent alone is insufficient: an explicit permissive descendant ACL can still grant access under Windows bypass-traverse behavior.
 
-An elevated Windows process can create files owned by `BUILTIN\Administrators` instead of its user SID. Those files are refused even when the user belongs to Administrators: allowing that group's ACL grants does not waive the ownership check. Run the app and provider without elevation, and repair the existing dedicated tree's ownership using the procedure below, or select a fresh app-owned home.
+An elevated Windows process can create files owned by `BUILTIN\Administrators` instead of its user SID. Those files work under an elevated process only when its Administrators group is enabled. A standard/filtered token keeps the current-SID-only ownership rule, even when the account belongs to Administrators. [WindowsPrincipal.IsInRole](https://learn.microsoft.com/en-us/dotnet/api/system.security.principal.windowsprincipal.isinrole?view=netframework-4.8.1) checks the enabled token role without displaying an elevation prompt. For a refusal, repair the dedicated tree's ownership using the procedure below or select a fresh app-owned home; the adapter never elevates or rewrites existing permissions automatically.
 
 On POSIX, the effective user must own every entry; no entry may grant group/other permissions or carry special mode bits. The root must be exactly `0700`. Owner-only files may be unreadable: the verifier queries metadata rather than opening them. Symlinks, Windows reparse points and unsupported special entries refuse the entire tree.
 
 Existing directories are inspected without rewriting their permissions. New homes are protected and independently verified before admission. Failed cleanup of a newly created directory raises DirectoryCleanupException with kind cleanup_failed, rather than promoting the residual directory into a trusted home on retry. Existing homes are never removed.
+
+Temporary Claude MCP configuration and permission-prompt directories retain their cleanup state until removal succeeds. A failed removal gets one deferred retry after stop; exhaustion emits a terminal protocol problem with a fixed path-free message. The process-stop verdict continues to describe process containment, separately from directory cleanup. No retry widens permissions or removes an existing credential home.
 
 ## Fixed scan limits
 

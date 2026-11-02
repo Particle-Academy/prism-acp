@@ -139,7 +139,8 @@ case and filesystem aliases. A new home is restricted and independently verified
 already be owned by the current user with exact `0700` permissions on POSIX, or a private ACL with current-user
 FullControl and inheritance disabled on Windows. Every descendant is also checked from permissions and ownership metadata; stored file
 contents are never read, copied or hashed. Windows allow principals are the current owner, SYSTEM and Administrators,
-with every entry owned by the current process SID. Symlinks/reparse points and unverifiable protection are refused. Existing homes
+with every entry owned by the current process SID, or Administrators only under an elevated token with that group enabled.
+Symlinks/reparse points and unverifiable protection are refused. Existing homes
 are never silently chmodded or re-ACL'd. Restore those permissions, or choose a new app-owned home, before retrying.
 Protection is checked again when handing the key or home to the provider. A failed new-directory cleanup raises a
 typed DirectoryCleanupException with kind cleanup_failed; no path, key or unsafe previous exception is attached.

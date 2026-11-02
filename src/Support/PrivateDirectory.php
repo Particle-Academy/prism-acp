@@ -154,8 +154,13 @@ final class PrivateDirectory
             $path = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:PRISM_ACP_DIRECTORY_DATA))
             $attributes = [IO.File]::GetAttributes($path)
             if (($attributes -band [IO.FileAttributes]::Directory) -eq 0 -or ($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { exit 1 }
-            $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+            $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $sid = $identity.User
             if ($null -eq $sid) { exit 1 }
+            $administrators = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+            $principal = [Security.Principal.WindowsPrincipal]::new($identity)
+            $owners = @($sid.Value)
+            if ($identity.Groups.Contains($administrators) -and $principal.IsInRole($administrators)) { $owners += $administrators.Value }
             $maxDepth = [int]$env:PRISM_ACP_DIRECTORY_DEPTH
             $maxEntries = [int]$env:PRISM_ACP_DIRECTORY_ENTRIES
             if ($maxDepth -lt 1 -or $maxEntries -lt 1) { exit 1 }
@@ -181,7 +186,7 @@ final class PrivateDirectory
                 if ($depth -eq 0 -and -not $directory) { throw 'unsafe-directory' }
                 $sections = [Security.AccessControl.AccessControlSections]::Access -bor [Security.AccessControl.AccessControlSections]::Owner
                 $verified = if ($directory) { [IO.Directory]::GetAccessControl($node, $sections) } else { [IO.File]::GetAccessControl($node, $sections) }
-                if ($verified.GetOwner([Security.Principal.SecurityIdentifier]).Value -cne $sid.Value) { throw 'unsafe-directory' }
+                if ($owners -cnotcontains $verified.GetOwner([Security.Principal.SecurityIdentifier]).Value) { throw 'unsafe-directory' }
                 $ownerFullControl = $false
                 foreach ($r in $verified.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier])) {
                     if ($r.AccessControlType -eq [Security.AccessControl.AccessControlType]::Allow) {

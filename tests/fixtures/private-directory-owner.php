@@ -43,6 +43,7 @@ if ($descendant) {
 $restore = null;
 $available = false;
 $refused = false;
+$expectedRefusal = true;
 $restored = true;
 try {
     if (PHP_OS_FAMILY === 'Windows') {
@@ -52,7 +53,8 @@ try {
         try {
             $path = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:PRISM_OWNER_FIXTURE_PATH))
             $current = [Security.Principal.WindowsIdentity]::GetCurrent().User
-            $target = if ($env:PRISM_OWNER_FIXTURE_MODE -ceq 'restore') { $current } else { New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544') }
+            $admin = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+            $target = if ($env:PRISM_OWNER_FIXTURE_MODE -ceq 'restore') { $current } else { $admin }
             $directory = ([IO.File]::GetAttributes($path) -band [IO.FileAttributes]::Directory) -ne 0
             $acl = if ($directory) { [IO.Directory]::GetAccessControl($path) } else { [IO.File]::GetAccessControl($path) }
             $acl.SetOwner($target)
@@ -60,14 +62,17 @@ try {
             $afterAcl = if ($directory) { [IO.Directory]::GetAccessControl($path) } else { [IO.File]::GetAccessControl($path) }
             $after = $afterAcl.GetOwner([Security.Principal.SecurityIdentifier])
             if ($after.Value -cne $target.Value) { exit 1 }
-            [Console]::Out.Write('owner-set')
+            $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+            $enabled = $identity.Groups.Contains($admin) -and [Security.Principal.WindowsPrincipal]::new($identity).IsInRole($admin)
+            [Console]::Out.Write($(if ($enabled) { 'owner-set-enabled' } else { 'owner-set-standard' }))
             exit 0
         } catch { exit 1 }
         PS;
         $command = [(getenv('SystemRoot') ?: 'C:\\Windows').'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', '-NoProfile', '-NonInteractive', '-EncodedCommand', base64_encode(mb_convert_encoding($script, 'UTF-16LE', 'UTF-8'))];
         $extra = ['PRISM_OWNER_FIXTURE_PATH' => base64_encode($node), 'PRISM_OWNER_FIXTURE_MODE' => 'wrong'];
         [$code, $out] = ownerFixtureCommand($command, $extra);
-        $available = $code === 0 && $out === 'owner-set';
+        $available = $code === 0 && in_array($out, ['owner-set-enabled', 'owner-set-standard'], true);
+        $expectedRefusal = $out !== 'owner-set-enabled';
         $restore = fn (): array => ownerFixtureCommand($command, [...$extra, 'PRISM_OWNER_FIXTURE_MODE' => 'restore']);
     } else {
         [$code, $uid] = ownerFixtureCommand(['/usr/bin/id', '-u']);
@@ -98,4 +103,4 @@ try {
     }
     rmdir($home);
 }
-echo json_encode(['available' => $available, 'refused' => $refused, 'restored' => $restored], JSON_THROW_ON_ERROR);
+echo json_encode(['available' => $available, 'refused' => $refused, 'expected_refusal' => $expectedRefusal, 'restored' => $restored], JSON_THROW_ON_ERROR);

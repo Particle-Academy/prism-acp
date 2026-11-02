@@ -29,6 +29,48 @@ function protectionScratch(): string
     return $root;
 }
 
+/** @return array{stat: array<int|string, int>, windowsAcl: ?string} */
+function protectionMetadata(string $home): array
+{
+    clearstatcache(true, $home);
+    $stat = lstat($home);
+    if ($stat === false) {
+        throw new RuntimeException('owned fixture metadata query failed');
+    }
+    // Directory enumeration may update access time; ownership, mode, identity and write/change times must stay exact.
+    unset($stat[8], $stat['atime']);
+    $acl = null;
+    if (PHP_OS_FAMILY === 'Windows') {
+        $script = <<<'PS'
+        $PSModuleAutoLoadingPreference = 'None'
+        $env:PSModulePath = ''
+        $ErrorActionPreference = 'Stop'
+        $ProgressPreference = 'SilentlyContinue'
+        try {
+            $path = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:PRISM_METADATA_FIXTURE_PATH))
+            $sections = [Security.AccessControl.AccessControlSections]::Access -bor [Security.AccessControl.AccessControlSections]::Owner -bor [Security.AccessControl.AccessControlSections]::Group
+            [Console]::Out.Write([IO.Directory]::GetAccessControl($path, $sections).GetSecurityDescriptorSddlForm($sections))
+            exit 0
+        } catch { exit 1 }
+        PS;
+        $command = [(getenv('SystemRoot') ?: 'C:\\Windows').'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', '-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', base64_encode(mb_convert_encoding($script, 'UTF-16LE', 'UTF-8'))];
+        $process = proc_open($command, [0 => ['file', 'NUL', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes,
+            env_vars: ChildEnv::build(getenv(), [], ['PSModulePath' => '', 'PRISM_METADATA_FIXTURE_PATH' => base64_encode($home)])->env, options: ['bypass_shell' => true]);
+        if (! is_resource($process)) {
+            throw new RuntimeException('owned fixture ACL query did not start');
+        }
+        $acl = stream_get_contents($pipes[1]);
+        $error = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        if (proc_close($process) !== 0 || $error !== '' || $acl === '') {
+            throw new RuntimeException('owned fixture ACL query failed');
+        }
+    }
+
+    return ['stat' => $stat, 'windowsAcl' => $acl];
+}
+
 function makeProtectionFixtureUnsafe(string $home): void
 {
     if (PHP_OS_FAMILY !== 'Windows') {
@@ -82,16 +124,19 @@ it('rechecks home protection before returning a checked key or provider environm
     }
 })->with(['key', 'environment']);
 
-it('admits a verified existing private home without changing its metadata', function (): void {
+it('admits an existing private home without changing security metadata or its Windows descriptor', function (): void {
     $root = protectionScratch();
     $home = $root.DIRECTORY_SEPARATOR.'new';
     try {
         $first = ApiKeyHome::check('codex', new ProviderCredentials('apiKey', 'owned-dummy-key', $home), []);
-        $before = lstat($home);
+        $before = protectionMetadata($home);
         $second = ApiKeyHome::check('codex', new ProviderCredentials('apiKey', 'owned-dummy-key', $home), []);
         clearstatcache(true, $home);
-        expect($second->home)->toBe($first->home)->and(lstat($home))->toBe($before);
+        expect($second->home)->toBe($first->home)->and(protectionMetadata($home))->toBe($before);
         PrivateDirectory::assertProtected($home);
+        makeProtectionFixtureUnsafe($home);
+        expect(protectionMetadata($home))->not->toBe($before);
+        expect(fn () => PrivateDirectory::assertProtected($home))->toThrow(DirectoryProtectionException::class);
     } finally {
         rmdir($home);
         rmdir($root);
@@ -270,7 +315,7 @@ it('rechecks the Claude home after configuration setup and before the provider h
     }
 });
 
-it('refuses a native root or descendant whose owner is a different identity', function (string $node): void {
+it('applies the current token owner policy to a native root or descendant', function (string $node): void {
     $root = protectionScratch();
     $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
     try {
@@ -288,7 +333,7 @@ it('refuses a native root or descendant whose owner is a different identity', fu
         if (! $result['available'] && getenv('GITHUB_ACTIONS') !== 'true') {
             $this->markTestSkipped('local account cannot assign another owner; hosted native owner fixture is mandatory');
         }
-        expect($result['available'])->toBeTrue()->and($result['refused'])->toBeTrue()->and($result['restored'])->toBeTrue();
+        expect($result['available'])->toBeTrue()->and($result['refused'])->toBe($result['expected_refusal'])->and($result['restored'])->toBeTrue();
     } finally {
         rmdir($root);
     }

@@ -18,6 +18,7 @@ $asked = 0;
 $errors = [];
 $exited = false;
 $turns = 0;
+$approvalDirectory = null;
 $driver = new ClaudeDriver(new ClaudeDriverOptions(
     cwd: $config['root'], binary: $config['node'], binaryArgs: [$config['bridge'], $argv[1]],
     parentEnv: getenv(), model: 'claude-sonnet-4-6', permissionMode: 'bypassPermissions',
@@ -53,6 +54,7 @@ $driver = new ClaudeDriver(new ClaudeDriverOptions(
 ), $loop);
 try {
     $driver->start();
+    $approvalDirectory = (new ReflectionProperty(ClaudeDriver::class, 'approvalDirectory'))->getValue($driver);
     $driver->prompt('Run the owned Bash probe.'); // Must be held until the native initialize version is validated.
     $driver->endInput();
     $deadline = microtime(true) + 45;
@@ -66,5 +68,9 @@ try {
     $errors[] = $error->getMessage();
 } finally {
     $stop = $driver->stop(0)->await();
-    echo json_encode(['asked' => $asked, 'errors' => $errors, 'turns' => $turns, 'stop' => $stop->toArray()], JSON_UNESCAPED_SLASHES)."\n";
+    if (is_string($approvalDirectory)) {
+        clearstatcache(true, $approvalDirectory);
+    }
+    echo json_encode(['asked' => $asked, 'errors' => $errors, 'turns' => $turns, 'stop' => $stop->toArray(),
+        'approvalDirectoryRemoved' => is_string($approvalDirectory) && ! is_dir($approvalDirectory)], JSON_UNESCAPED_SLASHES)."\n";
 }
