@@ -6,6 +6,8 @@ use Prism\Acp\Env\ChildEnv;
 use Prism\Acp\Process\WindowsProviderProcess;
 use Prism\Acp\Support\PrivateDirectory;
 
+require_once dirname(__DIR__).'/fixtures/native-file-diagnostic.php';
+
 /** @return array<string, mixed> */
 function phpNativeApproval(string $scenario, string $mutation = '', string $versionFault = '', bool $wildcard = false): array
 {
@@ -14,7 +16,7 @@ function phpNativeApproval(string $scenario, string $mutation = '', string $vers
     $out = '';
     $err = '';
     try {
-        $outer = WindowsProviderProcess::launch('node', [dirname(__DIR__).'/fixtures/native-approval-probe.mjs', PHP_BINARY, (string) getenv('PRISM_ACP_CLAUDE_BINARY'), $scenario, $mutation, $versionFault, $wildcard ? '1' : '0'], $root, ChildEnv::build(getenv())->env);
+        $outer = WindowsProviderProcess::launch('node', [dirname(__DIR__).'/fixtures/native-approval-probe.mjs', PHP_BINARY, (string) getenv('PRISM_ACP_CLAUDE_BINARY'), $scenario, $mutation, $versionFault, $wildcard ? '1' : '0', ownedNativeFileDiagnosticExecutable()], $root, ChildEnv::build(getenv())->env);
         $outer->closeInput();
         $deadline = microtime(true) + 60;
         while ($outer->isOpen() && microtime(true) < $deadline) {

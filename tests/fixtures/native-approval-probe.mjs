@@ -5,7 +5,7 @@ import {existsSync,mkdtempSync,readFileSync,realpathSync,rmSync,writeFileSync} f
 import {tmpdir} from 'node:os';
 import {dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
-const [php,binary,scenario,mutation,versionFault,wildcard]=process.argv.slice(2);
+const [php,binary,scenario,mutation,versionFault,wildcard,diagnostic]=process.argv.slice(2);
 const root=mkdtempSync(join(tmpdir(),'prism-php-native-approval-'));
 const allowed=new Set(['SYSTEMROOT','WINDIR','COMSPEC','PATH','PATHEXT','TEMP','TMP','TMPDIR','LANG']);
 const env={...Object.fromEntries(Object.entries(process.env).filter(([k])=>allowed.has(k.toUpperCase()))),HOME:root,USERPROFILE:root,XDG_CONFIG_HOME:root};
@@ -33,7 +33,7 @@ const proxy=createServer((req,res)=>{blocked.push(req.url??'unknown');res.writeH
 proxy.on('connect',(req,socket)=>{blocked.push(req.url??'CONNECT');socket.end('HTTP/1.1 502 Blocked\r\n\r\n');});
 await new Promise(r=>model.listen(0,'127.0.0.1',r));await new Promise(r=>proxy.listen(0,'127.0.0.1',r));
 const here=dirname(fileURLToPath(import.meta.url));
-const config={php,binary,scenario,mutation:mutation||null,versionFault:versionFault||null,wildcard:wildcard==='1',root,home:join(root,'home'),node:process.execPath,bridge:join(here,'native-approval-bridge.mjs'),receipt:join(root,'native.json'),modelUrl:'http://127.0.0.1:'+model.address().port,proxyUrl:'http://127.0.0.1:'+proxy.address().port};
+const config={php,binary,diagnostic,scenario,mutation:mutation||null,versionFault:versionFault||null,wildcard:wildcard==='1',root,home:join(root,'home'),node:process.execPath,bridge:join(here,'native-approval-bridge.mjs'),receipt:join(root,'native.json'),modelUrl:'http://127.0.0.1:'+model.address().port,proxyUrl:'http://127.0.0.1:'+proxy.address().port};
 const configPath=join(root,'config.json');writeFileSync(configPath,JSON.stringify(config));
 let host;
 try{
@@ -46,7 +46,7 @@ try{
  });
  const receipt=existsSync(config.receipt)?JSON.parse(readFileSync(config.receipt,'utf8')):{sent:[],versions:[],nativeCode:null};
  const results=requests.flatMap(r=>r.messages.flatMap(m=>Array.isArray(m.content)?m.content.filter(c=>c.type==='tool_result'):[]));
- console.log(JSON.stringify({...row,scenario,mutation:mutation||null,versionFault:versionFault||null,requests:requests.length,executed:JSON.stringify(results).includes('PRISM_PHP_HOOK_EXECUTED'),sentUsers:receipt.sent.filter(f=>f.type==='user').length,reportedVersions:receipt.versions,nativeCode:receipt.nativeCode,hook:receipt.hook??null,toolResults:results,blockedConnections:blocked}));
+ console.log(JSON.stringify({...row,nativeProcessIds:{bridge:receipt.bridgePid??null,native:receipt.nativePid??null},scenario,mutation:mutation||null,versionFault:versionFault||null,requests:requests.length,executed:JSON.stringify(results).includes('PRISM_PHP_HOOK_EXECUTED'),sentUsers:receipt.sent.filter(f=>f.type==='user').length,reportedVersions:receipt.versions,nativeCode:receipt.nativeCode,hook:receipt.hook??null,toolResults:results,blockedConnections:blocked}));
 }finally{
  if(host&&host.exitCode===null&&host.signalCode===null){
   const closed=new Promise(r=>host.once('close',r));host.kill();
