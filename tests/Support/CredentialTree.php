@@ -72,7 +72,6 @@ final class CredentialTree
             if (@('private','privileged','world','deny','deny-world') -cnotcontains $mode) { exit 1 }
             $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
             $acl = New-Object Security.AccessControl.FileSecurity
-            $acl.SetOwner($sid)
             $acl.SetAccessRuleProtection($true, $false)
             $acl.AddAccessRule((New-Object Security.AccessControl.FileSystemAccessRule($sid, [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.AccessControlType]::Allow)))
             if ($mode -eq 'privileged') {

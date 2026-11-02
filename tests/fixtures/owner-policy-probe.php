@@ -7,8 +7,16 @@ require $argv[1];
 use Prism\Acp\Credentials\ApiKeyHome;
 use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Support\DirectoryProtectionException;
+use Prism\Acp\Support\PrivateDirectory;
 
 $root = $argv[2];
+if (($argv[3] ?? '') === 'restricted') {
+    $fresh = $root.DIRECTORY_SEPARATOR.'user-home';
+    if (file_exists($fresh) || ! mkdir($fresh, 0700)) {
+        throw new RuntimeException('filtered-token home must be created fresh by that token');
+    }
+    PrivateDirectory::protect($fresh);
+}
 $observations = [];
 foreach (['user-home', 'admin-home', 'foreign-home'] as $name) {
     try {

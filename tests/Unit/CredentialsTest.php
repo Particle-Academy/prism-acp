@@ -12,6 +12,7 @@ use Prism\Acp\Codex\CodexTransportOptions;
 use Prism\Acp\Credentials\ApiKeyHome;
 use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Env\ChildEnv;
+use Prism\Acp\Process\WindowsProviderProcess;
 use Prism\Acp\Support\PrivateDirectory;
 use Tests\Support\ScriptedCodexTransport;
 use Tests\Support\WindowsPermissions;
@@ -110,27 +111,41 @@ it('removes its empty new home after a real Windows permission setup failure bef
     $home = $root.DIRECTORY_SEPARATOR.'new-home';
     $code = <<<'PHP'
     require $argv[1];
+    putenv('SystemRoot='.$argv[3]);
     try {
         \Prism\Acp\Credentials\ApiKeyHome::check('codex', new \Prism\Acp\Credentials\ProviderCredentials('apiKey', 'dummy', $argv[2]), []);
         echo json_encode(['failed' => false, 'removed' => false]);
-    } catch (Throwable) {
-        echo json_encode(['failed' => true, 'removed' => !is_dir($argv[2])]);
+    } catch (Throwable $error) {
+        echo json_encode(['failed' => $error instanceof \Prism\Acp\Support\DirectoryProtectionException, 'removed' => !is_dir($argv[2])]);
     }
     PHP;
-    // Only this isolated host receives the broken system-tool path; the test runner's environment stays intact.
-    $env = ChildEnv::build(getenv(), [], ['SystemRoot' => $root.DIRECTORY_SEPARATOR.'missing-system-tools'])->env;
+    // Break only the isolated PHP fixture's tool path; keep its supervisor and the test runner intact.
+    $env = ChildEnv::build(getenv())->env;
+    $process = null;
     try {
-        $process = proc_open([PHP_BINARY, '-d', 'display_errors=stderr', '-d', 'log_errors=0', '-r', $code, dirname(__DIR__, 2).'/vendor/autoload.php', $home],
-            [0 => ['file', 'NUL', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, env_vars: $env, options: ['bypass_shell' => true]);
-        if (! is_resource($process)) {
-            throw new RuntimeException('permission-failure host did not start');
+        $process = WindowsProviderProcess::launch(PHP_BINARY, ['-d', 'display_errors=stderr', '-d', 'log_errors=0', '-r', $code, dirname(__DIR__, 2).'/vendor/autoload.php', $home, $root.DIRECTORY_SEPARATOR.'missing-system-tools'], dirname(__DIR__, 2), $env);
+        $process->closeInput();
+        $out = $err = '';
+        $deadline = microtime(true) + 10;
+        while ($process->isOpen() && microtime(true) < $deadline) {
+            foreach ($process->read(0.02) as [$kind, $bytes]) {
+                if ($kind === 'stdout') {
+                    $out .= $bytes;
+                } elseif ($kind === 'stderr') {
+                    $err .= $bytes;
+                }
+            }
         }
-        $out = stream_get_contents($pipes[1]);
-        fclose($pipes[1]);
-        stream_get_contents($pipes[2]);
-        fclose($pipes[2]);
-        expect(proc_close($process))->toBe(0)->and(json_decode($out, true, flags: JSON_THROW_ON_ERROR))->toBe(['failed' => true, 'removed' => true]);
+        expect($process->isOpen())->toBeFalse()->and($err)->toBe('');
+        $stop = $process->stop(0);
+        expect($stop->verified)->toBeTrue()->and($stop->empty)->toBeTrue()->and($stop->survivors)->toBe(0)
+            ->and(json_decode($out, true, flags: JSON_THROW_ON_ERROR))->toBe(['failed' => true, 'removed' => true])
+            ->and(is_dir($home))->toBeFalse();
     } finally {
+        if ($process !== null) {
+            $stop = $process->stop(0);
+            expect($stop->verified)->toBeTrue()->and($stop->empty)->toBeTrue()->and($stop->survivors)->toBe(0);
+        }
         if (is_dir($home)) {
             rmdir($home);
         } rmdir($root);

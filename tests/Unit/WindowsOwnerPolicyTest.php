@@ -19,8 +19,11 @@ it('evaluates natural Administrators and foreign ownership with actual elevated 
     try {
         foreach (['user-home', 'admin-home', 'foreign-home'] as $name) {
             $home = $root.DIRECTORY_SEPARATOR.$name;
-            mkdir($home, 0700);
             $homes[] = $home;
+            if ($name === 'user-home' && $mode === 'restricted') {
+                continue; // The actual filtered child creates this with its natural user ownership.
+            }
+            mkdir($home, 0700);
             PrivateDirectory::protect($home);
             if ($name !== 'user-home') {
                 $file = fopen($home.DIRECTORY_SEPARATOR.'empty-marker', 'x');
@@ -47,7 +50,7 @@ it('evaluates natural Administrators and foreign ownership with actual elevated 
         fclose($pipes[1]);
         fclose($pipes[2]);
         expect(proc_close($build))->toBe(0, $compilerOutput);
-        $command = WindowsCommand::commandLine([PHP_BINARY, dirname(__DIR__).'/fixtures/owner-policy-probe.php', dirname(__DIR__, 2).'/vendor/autoload.php', $root]);
+        $command = WindowsCommand::commandLine([PHP_BINARY, dirname(__DIR__).'/fixtures/owner-policy-probe.php', dirname(__DIR__, 2).'/vendor/autoload.php', $root, $mode]);
         $provider = WindowsProviderProcess::launch($exe, [$mode, $root, PHP_BINARY, $command], $root, $env);
         $provider->closeInput();
         $out = $err = '';
@@ -85,7 +88,9 @@ it('evaluates natural Administrators and foreign ownership with actual elevated 
             if (is_file($marker)) {
                 unlink($marker);
             }
-            rmdir($home);
+            if (is_dir($home)) {
+                rmdir($home);
+            }
         }
         if (is_file($exe)) {
             unlink($exe);

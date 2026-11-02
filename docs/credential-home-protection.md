@@ -31,7 +31,7 @@ find "$credential_home" -type d -exec chmod 700 {} +
 find "$credential_home" -type f -exec chmod 600 {} +
 ```
 
-On Windows, stop the provider and use PowerShell with the authority to repair that app-owned tree. Remove links first; `/L` keeps icacls operating on a link itself if one remains. The following replaces each entry's descriptor with a private descriptor without first resetting it to potentially permissive parent defaults. It touches ownership and ACL metadata only:
+On Windows, stop the provider and use PowerShell with the authority to repair that app-owned tree. Remove links first. The following checks ownership, then replaces only each entry's access rules with private rules, without resetting them to potentially permissive parent defaults. It preserves the natural owner and does not require `WRITE_OWNER` merely to rewrite an already-correct owner:
 
 ```powershell
 $credentialHome = 'C:\AppState\tenant-42\codex'
@@ -39,16 +39,24 @@ $PSModuleAutoLoadingPreference = 'None'
 $env:PSModulePath = ''
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-$credentialOwnerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
-$credentialAclTool = $env:SystemRoot + '\System32\icacls.exe'
-& $credentialAclTool $credentialHome /setowner "*$($credentialOwnerSid.Value)" /T /L
-if ($LASTEXITCODE -ne 0) { throw 'Ownership repair failed; select a fresh app-owned home.' }
+$credentialIdentity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$credentialOwnerSid = $credentialIdentity.User
+$credentialAdministrators = [Security.Principal.SecurityIdentifier]::new('S-1-5-32-544')
+$credentialPrincipal = [Security.Principal.WindowsPrincipal]::new($credentialIdentity)
+$credentialAcceptedOwners = @($credentialOwnerSid.Value)
+if ($credentialIdentity.Groups.Contains($credentialAdministrators) -and $credentialPrincipal.IsInRole($credentialAdministrators)) {
+    $credentialAcceptedOwners += $credentialAdministrators.Value
+}
 function Repair-AppHomePermissions([string] $node) {
     $attributes = [IO.File]::GetAttributes($node)
     if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Remove links before repair.' }
     $directory = ($attributes -band [IO.FileAttributes]::Directory) -ne 0
+    $ownerSection = [Security.AccessControl.AccessControlSections]::Owner
+    $current = if ($directory) { [IO.Directory]::GetAccessControl($node, $ownerSection) } else { [IO.File]::GetAccessControl($node, $ownerSection) }
+    if ($credentialAcceptedOwners -cnotcontains $current.GetOwner([Security.Principal.SecurityIdentifier]).Value) {
+        throw 'Ownership repair needs an authorized account; choose a fresh app-owned home if unavailable.'
+    }
     $acl = if ($directory) { [Security.AccessControl.DirectorySecurity]::new() } else { [Security.AccessControl.FileSecurity]::new() }
-    $acl.SetOwner($credentialOwnerSid)
     $acl.SetAccessRuleProtection($true, $false)
     $rule = if ($directory) {
         [Security.AccessControl.FileSystemAccessRule]::new($credentialOwnerSid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
@@ -66,6 +74,8 @@ function Repair-AppHomePermissions([string] $node) {
 Repair-AppHomePermissions $credentialHome
 ```
 
-These commands reset permissions throughout the selected dedicated tree. Select the app's exact home, then retry admission. The root and all descendants must satisfy the policy; fixing only the parent descriptor is insufficient.
+These commands reset access rules throughout the selected dedicated tree. Select the app's exact home, then retry admission. The root and all descendants must satisfy the policy; fixing only the parent descriptor is insufficient.
+
+If an entry has the wrong owner, use an account authorized to repair ownership or choose a fresh dedicated home. `icacls /setowner` and `.SetOwner()` are separate ownership-changing operations; they can fail without `WRITE_OWNER` even when the requested owner is already correct. Do not include them in routine access-only repair. An ownership repair may require an elevated administrator, and the adapter never elevates itself or changes an existing home's owner.
 
 The adapter checks a metadata snapshot at each handoff. The app must keep ownership of the dedicated path and its parent directories; it cannot prevent the same OS identity or an administrator from changing permissions after a check. Windows command semantics are documented in [Microsoft's icacls reference](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/icacls).

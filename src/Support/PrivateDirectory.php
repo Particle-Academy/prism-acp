@@ -166,7 +166,7 @@ final class PrivateDirectory
             if ($maxDepth -lt 1 -or $maxEntries -lt 1) { exit 1 }
             if ($env:PRISM_ACP_DIRECTORY_MODE -ceq 'protect') {
                 $acl = [Security.AccessControl.DirectorySecurity]::new()
-                $acl.SetOwner($sid)
+                # Persist Access only. Rewriting even the same owner requires WRITE_OWNER.
                 $acl.SetAccessRuleProtection($true, $false)
                 $rule = [Security.AccessControl.FileSystemAccessRule]::new($sid, [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit', [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow)
                 $acl.AddAccessRule($rule)
