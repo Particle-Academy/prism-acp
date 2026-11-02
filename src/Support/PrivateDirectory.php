@@ -145,7 +145,9 @@ final class PrivateDirectory
     }
 
     // Readable source, encoded at runtime. No path or key is interpolated into this script.
-    private const WINDOWS_PERMISSION_SCRIPT = <<<'PS'
+    private const WINDOWS_PERMISSION_SCRIPT = <<<'DIRECTORY_PERMISSION_SOURCE'
+        $PSModuleAutoLoadingPreference = 'None'
+        $env:PSModulePath = ''
         $ErrorActionPreference = 'Stop'
         $ProgressPreference = 'SilentlyContinue'
         try {
@@ -158,10 +160,10 @@ final class PrivateDirectory
             $maxEntries = [int]$env:PRISM_ACP_DIRECTORY_ENTRIES
             if ($maxDepth -lt 1 -or $maxEntries -lt 1) { exit 1 }
             if ($env:PRISM_ACP_DIRECTORY_MODE -ceq 'protect') {
-                $acl = New-Object Security.AccessControl.DirectorySecurity
+                $acl = [Security.AccessControl.DirectorySecurity]::new()
                 $acl.SetOwner($sid)
                 $acl.SetAccessRuleProtection($true, $false)
-                $rule = New-Object Security.AccessControl.FileSystemAccessRule($sid, [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit', [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow)
+                $rule = [Security.AccessControl.FileSystemAccessRule]::new($sid, [Security.AccessControl.FileSystemRights]::FullControl, [Security.AccessControl.InheritanceFlags]'ContainerInherit,ObjectInherit', [Security.AccessControl.PropagationFlags]::None, [Security.AccessControl.AccessControlType]::Allow)
                 $acl.AddAccessRule($rule)
                 [IO.Directory]::SetAccessControl($path, $acl)
             } elseif ($env:PRISM_ACP_DIRECTORY_MODE -cne 'verify') { exit 1 }
@@ -203,12 +205,13 @@ final class PrivateDirectory
             if ($_.Exception.Message -ceq 'entry-limit') { exit 3 }
             exit 1
         }
-        PS;
+        DIRECTORY_PERMISSION_SOURCE;
 
     private static function windowsPermissions(#[\SensitiveParameter] string $directory, bool $protect, float $deadline): void
     {
         $system32 = (getenv('SystemRoot') ?: 'C:\\Windows').'\\System32';
         $env = ChildEnv::build(getenv(), [], [
+            'PSModulePath' => '',
             'PRISM_ACP_DIRECTORY_DATA' => base64_encode($directory),
             'PRISM_ACP_DIRECTORY_MODE' => $protect ? 'protect' : 'verify',
             'PRISM_ACP_DIRECTORY_DEPTH' => (string) self::MAX_DEPTH,

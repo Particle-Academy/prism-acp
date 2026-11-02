@@ -4,6 +4,8 @@ Use a dedicated app-owned home for API-key mode. Admission checks the home and e
 
 On Windows, every entry must be owned by the current process SID. Allow ACEs may name that user, SYSTEM or Administrators. The root needs protected inheritance and current-user FullControl. Descendants may inherit private permissions or have private explicit ACLs. A protected parent alone is insufficient: an explicit permissive descendant ACL can still grant access under Windows bypass-traverse behavior.
 
+An elevated Windows process can create files owned by `BUILTIN\Administrators` instead of its user SID. Those files are refused even when the user belongs to Administrators: allowing that group's ACL grants does not waive the ownership check. Run the app and provider without elevation, and repair the existing dedicated tree's ownership using the procedure below, or select a fresh app-owned home.
+
 On POSIX, the effective user must own every entry; no entry may grant group/other permissions or carry special mode bits. The root must be exactly `0700`. Owner-only files may be unreadable: the verifier queries metadata rather than opening them. Symlinks, Windows reparse points and unsupported special entries refuse the entire tree.
 
 Existing directories are inspected without rewriting their permissions. New homes are protected and independently verified before admission. Failed cleanup of a newly created directory raises DirectoryCleanupException with kind cleanup_failed, rather than promoting the residual directory into a trusted home on retry. Existing homes are never removed.
@@ -31,22 +33,25 @@ On Windows, stop the provider and use PowerShell with the authority to repair th
 
 ```powershell
 $credentialHome = 'C:\AppState\tenant-42\codex'
+$PSModuleAutoLoadingPreference = 'None'
+$env:PSModulePath = ''
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $credentialOwnerSid = [Security.Principal.WindowsIdentity]::GetCurrent().User
-icacls.exe $credentialHome /setowner "*$($credentialOwnerSid.Value)" /T /L
+$credentialAclTool = $env:SystemRoot + '\System32\icacls.exe'
+& $credentialAclTool $credentialHome /setowner "*$($credentialOwnerSid.Value)" /T /L
 if ($LASTEXITCODE -ne 0) { throw 'Ownership repair failed; select a fresh app-owned home.' }
 function Repair-AppHomePermissions([string] $node) {
     $attributes = [IO.File]::GetAttributes($node)
     if (($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Remove links before repair.' }
     $directory = ($attributes -band [IO.FileAttributes]::Directory) -ne 0
-    $acl = if ($directory) { New-Object Security.AccessControl.DirectorySecurity } else { New-Object Security.AccessControl.FileSecurity }
+    $acl = if ($directory) { [Security.AccessControl.DirectorySecurity]::new() } else { [Security.AccessControl.FileSecurity]::new() }
     $acl.SetOwner($credentialOwnerSid)
     $acl.SetAccessRuleProtection($true, $false)
     $rule = if ($directory) {
-        New-Object Security.AccessControl.FileSystemAccessRule($credentialOwnerSid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+        [Security.AccessControl.FileSystemAccessRule]::new($credentialOwnerSid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
     } else {
-        New-Object Security.AccessControl.FileSystemAccessRule($credentialOwnerSid, 'FullControl', 'Allow')
+        [Security.AccessControl.FileSystemAccessRule]::new($credentialOwnerSid, 'FullControl', 'Allow')
     }
     $acl.AddAccessRule($rule)
     if ($directory) {

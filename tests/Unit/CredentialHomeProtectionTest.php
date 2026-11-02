@@ -221,7 +221,7 @@ it('rechecks protection after a Codex transport starts and before handing it the
     }
 });
 
-it('runs byte-identical readable PowerShell for hostile names with literal encoded child-only path data', function (): void {
+it('runs byte-identical readable PowerShell for hostile names with literal data and no module loading', function (): void {
     if (PHP_OS_FAMILY !== 'Windows') {
         $this->markTestSkipped('the native PowerShell command boundary is Windows-specific');
     }
@@ -240,7 +240,8 @@ it('runs byte-identical readable PowerShell for hostile names with literal encod
         $result = json_decode($stdout, true, flags: JSON_THROW_ON_ERROR);
         expect($result['admitted'])->toBe(2)->and($result['calls'])->toBeGreaterThanOrEqual(8)
             ->and($result['same_script'])->toBeTrue()->and($result['flags'])->toBeTrue()
-            ->and($result['absolute'])->toBeTrue()->and($result['literal'])->toBeTrue()->and($result['no_credentials'])->toBeTrue();
+            ->and($result['absolute'])->toBeTrue()->and($result['literal'])->toBeTrue()->and($result['no_credentials'])->toBeTrue()
+            ->and($result['no_module_loading'])->toBeTrue();
     } finally {
         rmdir($root);
     }

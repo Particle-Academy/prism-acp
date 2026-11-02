@@ -18,7 +18,11 @@ namespace Prism\Acp\Support {
         $GLOBALS['probe_flags'] = $GLOBALS['probe_flags'] && in_array('-NoProfile', $command, true) && in_array('-NonInteractive', $command, true);
         $GLOBALS['probe_absolute'] = $GLOBALS['probe_absolute'] && WindowsCommand::isAbsolute($command[0]) && str_ends_with(strtolower($command[0]), '\\windowspowershell\\v1.0\\powershell.exe');
         $GLOBALS['probe_literal'] = $GLOBALS['probe_literal'] && ($env['PRISM_ACP_DIRECTORY_DATA'] ?? null) === base64_encode($GLOBALS['probe_expected_home']);
-        $GLOBALS['probe_no_credentials'] = $GLOBALS['probe_no_credentials'] && array_intersect(array_map('strtoupper', array_keys($env ?? [])), ChildEnv::OUTRANKING_CREDENTIALS) === [];
+        $GLOBALS['probe_no_credentials'] = $GLOBALS['probe_no_credentials'] && array_intersect(array_map(strtoupper(...), array_keys($env ?? [])), ChildEnv::OUTRANKING_CREDENTIALS) === [];
+        $GLOBALS['probe_no_modules'] = $GLOBALS['probe_no_modules'] && is_string($readable)
+            && str_contains($readable, "\$PSModuleAutoLoadingPreference = 'None'")
+            && str_contains($readable, "\$env:PSModulePath = ''")
+            && array_key_exists('PSModulePath', $env ?? []) && $env['PSModulePath'] === '';
 
         return \proc_open($command, $descriptors, $pipes, $cwd, $env, $options);
     }
@@ -31,7 +35,7 @@ namespace {
 
     require $argv[1];
     $GLOBALS['probe_scripts'] = [];
-    $GLOBALS['probe_flags'] = $GLOBALS['probe_absolute'] = $GLOBALS['probe_literal'] = $GLOBALS['probe_no_credentials'] = true;
+    $GLOBALS['probe_flags'] = $GLOBALS['probe_absolute'] = $GLOBALS['probe_literal'] = $GLOBALS['probe_no_credentials'] = $GLOBALS['probe_no_modules'] = true;
     $leaf = <<<'NAME'
     quote'-$(throw 'owned-injection')-`-;-é
     NAME;
@@ -52,7 +56,7 @@ namespace {
         foreach ($GLOBALS['probe_scripts'] as $script) {
             $same = $same && $script === $constant;
         }
-        echo json_encode(['admitted' => $admitted, 'same_script' => $same, 'calls' => count($GLOBALS['probe_scripts']), 'flags' => $GLOBALS['probe_flags'], 'absolute' => $GLOBALS['probe_absolute'], 'literal' => $GLOBALS['probe_literal'], 'no_credentials' => $GLOBALS['probe_no_credentials']], JSON_THROW_ON_ERROR);
+        echo json_encode(['admitted' => $admitted, 'same_script' => $same, 'calls' => count($GLOBALS['probe_scripts']), 'flags' => $GLOBALS['probe_flags'], 'absolute' => $GLOBALS['probe_absolute'], 'literal' => $GLOBALS['probe_literal'], 'no_credentials' => $GLOBALS['probe_no_credentials'], 'no_module_loading' => $GLOBALS['probe_no_modules']], JSON_THROW_ON_ERROR);
     } finally {
         foreach ($homes as $home) {
             if (is_dir($home)) {
