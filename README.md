@@ -3,14 +3,14 @@
 Speak the Agent Client Protocol to Claude or Codex from plain PHP or an application that uses PHP, through a signed-in
 subscription or an API key supplied by the app. The core has no third-party runtime dependencies and does not require Laravel.
 
-**Windows preview for Claude and Codex.** Linux/macOS process containment is not implemented;
+**Windows only, for Claude and Codex.** Linux/macOS process containment is not implemented;
 those platforms are refused before a provider starts. Laravel applications can use the core classes;
-automatic service-provider discovery and an artisan command are not included. The pre-release API may change.
+automatic service-provider discovery and an artisan command are not included.
 
 ## Install
 
 ```sh
-composer require particle-academy/prism-acp:0.1.0-alpha.5
+composer require particle-academy/prism-acp:^0.1
 ```
 
 Requires PHP 8.2 or newer, `ext-ctype`, `ext-json`, `ext-mbstring`, Windows with the .NET Framework 4 C# compiler, and an installed,
