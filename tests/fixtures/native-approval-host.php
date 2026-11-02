@@ -19,6 +19,7 @@ $errors = [];
 $exited = false;
 $turns = 0;
 $approvalDirectory = null;
+$nativeStartCompleted = false;
 $driver = new ClaudeDriver(new ClaudeDriverOptions(
     cwd: $config['root'], binary: $config['node'], binaryArgs: [$config['bridge'], $argv[1]],
     parentEnv: getenv(), model: 'claude-sonnet-4-6', permissionMode: 'bypassPermissions',
@@ -54,6 +55,7 @@ $driver = new ClaudeDriver(new ClaudeDriverOptions(
 ), $loop);
 try {
     $driver->start();
+    $nativeStartCompleted = true;
     $approvalDirectory = (new ReflectionProperty(ClaudeDriver::class, 'approvalDirectory'))->getValue($driver);
     $driver->prompt('Run the owned Bash probe.'); // Must be held until the native initialize version is validated.
     $driver->endInput();
@@ -71,6 +73,18 @@ try {
     if (is_string($approvalDirectory)) {
         clearstatcache(true, $approvalDirectory);
     }
+    $cleanup = null;
+    if (is_string($approvalDirectory) && is_dir($approvalDirectory)) {
+        // Owned temporary directory metadata only; never open or print file contents or paths.
+        $names = scandir($approvalDirectory);
+        $known = (new ReflectionProperty(ClaudeDriver::class, 'approvalFiles'))->getValue($driver);
+        $retained = (new ReflectionProperty(ClaudeDriver::class, 'approvalDirectory'))->getValue($driver);
+        $cleanup = ['retained' => $retained === $approvalDirectory,
+            'entries' => $names === false ? null : count(array_diff($names, ['.', '..'])),
+            'knownFilesPresent' => count(array_filter($known, is_file(...)))];
+    }
     echo json_encode(['asked' => $asked, 'errors' => $errors, 'turns' => $turns, 'stop' => $stop->toArray(),
+        'nativeStartCompleted' => $nativeStartCompleted, 'approvalDirectoryCaptured' => is_string($approvalDirectory),
+        'residualApprovalMetadata' => $cleanup,
         'approvalDirectoryRemoved' => is_string($approvalDirectory) && ! is_dir($approvalDirectory)], JSON_UNESCAPED_SLASHES)."\n";
 }

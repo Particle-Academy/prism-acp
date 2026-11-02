@@ -100,6 +100,7 @@ it('evaluates natural Administrators and foreign ownership with actual elevated 
         expect(rmdir($root))->toBeTrue();
     }
     if ($unavailable !== null) {
+        echo json_encode(['nativeOwnerToken' => ['available' => false, 'mode' => $mode, 'reason' => $unavailable]], JSON_THROW_ON_ERROR)."\n";
         $this->markTestSkipped('native owner token control unmeasured: '.$unavailable);
     }
 })->with(['elevated', 'restricted']);

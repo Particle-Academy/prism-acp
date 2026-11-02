@@ -28,9 +28,10 @@ function phpNativeApproval(string $scenario, string $mutation = '', string $vers
         }
         expect($outer->isOpen())->toBeFalse()->and($outer->exitCode())->toBe(0, $err);
         $row = json_decode(trim($out), true, flags: JSON_THROW_ON_ERROR);
+        // Preserve safe owned-fixture diagnostics even when a native assertion fails.
+        echo json_encode(['phpNativeApproval' => $row], JSON_UNESCAPED_SLASHES)."\n";
         expect($row['stop']['verified'])->toBeTrue()->and($row['stop']['empty'])->toBeTrue()->and($row['stop']['survivors'])->toBe(0);
         expect($row['approvalDirectoryRemoved'])->toBeTrue();
-        echo json_encode(['phpNativeApproval' => $row], JSON_UNESCAPED_SLASHES)."\n";
 
         return $row;
     } finally {
