@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Fixed: the package version constant reported `0.1.0-alpha.5` in the 0.1.0 tag. No other changes. Use this release rather than 0.1.0.
+
 ## 0.1.0
 
 First stable release.
