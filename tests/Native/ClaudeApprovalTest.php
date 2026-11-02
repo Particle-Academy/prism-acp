@@ -6,6 +6,8 @@ use Prism\Acp\Env\ChildEnv;
 use Prism\Acp\Process\WindowsProviderProcess;
 use Prism\Acp\Support\PrivateDirectory;
 
+require_once dirname(__DIR__).'/fixtures/native-file-diagnostic.php';
+
 /** @return array<string, mixed> */
 function phpNativeApproval(string $scenario, string $mutation = '', string $versionFault = '', bool $wildcard = false): array
 {
@@ -14,7 +16,7 @@ function phpNativeApproval(string $scenario, string $mutation = '', string $vers
     $out = '';
     $err = '';
     try {
-        $outer = WindowsProviderProcess::launch('node', [dirname(__DIR__).'/fixtures/native-approval-probe.mjs', PHP_BINARY, (string) getenv('PRISM_ACP_CLAUDE_BINARY'), $scenario, $mutation, $versionFault, $wildcard ? '1' : '0'], $root, ChildEnv::build(getenv())->env);
+        $outer = WindowsProviderProcess::launch('node', [dirname(__DIR__).'/fixtures/native-approval-probe.mjs', PHP_BINARY, (string) getenv('PRISM_ACP_CLAUDE_BINARY'), $scenario, $mutation, $versionFault, $wildcard ? '1' : '0', ownedNativeFileDiagnosticExecutable()], $root, ChildEnv::build(getenv())->env);
         $outer->closeInput();
         $deadline = microtime(true) + 60;
         while ($outer->isOpen() && microtime(true) < $deadline) {
@@ -28,8 +30,10 @@ function phpNativeApproval(string $scenario, string $mutation = '', string $vers
         }
         expect($outer->isOpen())->toBeFalse()->and($outer->exitCode())->toBe(0, $err);
         $row = json_decode(trim($out), true, flags: JSON_THROW_ON_ERROR);
-        expect($row['stop']['verified'])->toBeTrue()->and($row['stop']['empty'])->toBeTrue()->and($row['stop']['survivors'])->toBe(0);
+        // Preserve safe owned-fixture diagnostics even when a native assertion fails.
         echo json_encode(['phpNativeApproval' => $row], JSON_UNESCAPED_SLASHES)."\n";
+        expect($row['stop']['verified'])->toBeTrue()->and($row['stop']['empty'])->toBeTrue()->and($row['stop']['survivors'])->toBe(0);
+        expect($row['approvalDirectoryRemoved'])->toBeTrue();
 
         return $row;
     } finally {

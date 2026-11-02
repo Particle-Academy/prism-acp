@@ -371,6 +371,16 @@ describe('ClaudeDriver against a process', function () {
 })->skip(PHP_OS_FAMILY !== 'Windows', 'containment exists on Windows only so far');
 
 describe('ClaudeDriver: permission prompts, end to end through the hook', function () {
+    it('removes its actual permission directory before normal stop completes', function (): void {
+        $h = new ClaudeHarness(new Loop, ['permissionPrompts' => ['Bash']]);
+        $h->driver->start();
+        $directory = (new ReflectionProperty(ClaudeDriver::class, 'approvalDirectory'))->getValue($h->driver);
+        expect($directory)->toBeString()->and(is_dir($directory))->toBeTrue();
+        $verdict = $h->driver->stop(1000)->await();
+        clearstatcache(true, $directory);
+        expect($verdict->verified)->toBeTrue()->and($verdict->empty)->toBeTrue()->and(is_dir($directory))->toBeFalse();
+    });
+
     it('runs a tool only on an explicit allow once, and tells the agent the client\'s reason', function () {
         $h = new ClaudeHarness(new Loop, ['permissionPrompts' => ['Bash']],
             fn (array $request) => PermissionOutcome::selected('allow_once', 'a person said yes'));

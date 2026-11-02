@@ -30,6 +30,8 @@ use Prism\Acp\Process\ProviderOnLoop;
 use Prism\Acp\Process\StopVerdict;
 use Prism\Acp\Prompt\Prompt;
 use Prism\Acp\SessionId;
+use Prism\Acp\Support\DirectoryCleanupException;
+use Prism\Acp\Support\DirectoryProtectionException;
 use Prism\Acp\Support\Js;
 use Prism\Acp\Support\PrivateDirectory;
 use Prism\Acp\Support\Utf8Stream;
@@ -133,6 +135,9 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
     private ?string $approvalFailure = null;
 
     private bool $approvalStopped = false;
+
+    /** @var Deferred<mixed>|null */
+    private ?Deferred $cleanup = null;
 
     /** @var list<string> */
     private array $heldPrompts = [];
@@ -363,6 +368,8 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
                 $env['PRISM_ACP_APPROVAL_SOCKET'] = $channel['socket'];
                 $env['PRISM_ACP_APPROVAL_TOKEN'] = $channel['token'];
             }
+            // Configuration setup can take time. Recheck at the actual provider handoff.
+            $env = array_replace($env, $keyed?->environment('claude') ?? []);
             $process = Provider::launch(
                 $this->options->binary,
                 [...$this->options->binaryArgs, ...self::args($this->options, $this->mcpConfigPath, $settingsPath)],
@@ -370,10 +377,9 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
                 $env,
             );
         } catch (\Throwable $cause) {
-            $this->removeMcpConfig();
-            $this->removeApprovals();
+            $this->finishCleanup()->await();
             // Its message names no path, and says why the CLI could not be run.
-            if ($cause instanceof ProcessTreeException) {
+            if ($cause instanceof ProcessTreeException || $cause instanceof DirectoryProtectionException || $cause instanceof DirectoryCleanupException) {
                 throw $cause;
             }
 
@@ -573,14 +579,20 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         $this->approvalStopped = true;
         $this->heldPrompts = [];
         $this->heldPromptBytes = 0;
+        $stopped = $this->provider?->stop($graceMs) ?? new Deferred($this->loop);
         if ($this->provider === null) {
-            $done = new Deferred($this->loop);
-            $done->resolve(new StopVerdict(true, true, 0, true));
-
-            return $done;
+            $stopped->resolve(new StopVerdict(true, true, 0, true));
         }
+        $done = new Deferred($this->loop);
+        $stopped->then(function (mixed $verdict) use ($done): void {
+            if ($verdict instanceof StopVerdict && $verdict->verified && $verdict->empty) {
+                $this->finishCleanup()->then(fn () => $done->resolve($verdict), fn (\Throwable $error) => $done->reject($error));
+            } else {
+                $done->resolve($verdict);
+            }
+        }, fn (\Throwable $error) => $done->reject($error));
 
-        return $this->provider->stop($graceMs);
+        return $done;
     }
 
     public function processTree(): ?ProcessTree
@@ -638,8 +650,7 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         foreach (array_keys($this->controlWaiters) as $id) {
             $this->settleControl((string) $id, null, new ModelListError('the Claude CLI exited before answering'));
         }
-        $this->removeMcpConfig();
-        $this->removeApprovals();
+        $this->finishCleanup();
         // Flush first: the LAST frame of a turn is the `result` that carries the outcome, newline or not.
         $this->emit($this->framer->end());
         $redactor = $this->stderrRedactor;
@@ -756,29 +767,124 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         $this->events->onProtocolError?->__invoke($problem, $recoverable);
     }
 
-    private function removeMcpConfig(): void
+    /**
+     * Retry known Windows pending-deletion entries for at most three seconds, without blocking the loop.
+     *
+     * @return Deferred<mixed>
+     */
+    private function finishCleanup(): Deferred
+    {
+        if ($this->cleanup !== null) {
+            return $this->cleanup;
+        }
+        $done = $this->cleanup = new Deferred($this->loop);
+        $deadline = microtime(true) + 3.0;
+        $this->removeMcpConfig(false);
+        $this->removeApprovals(false);
+        if ($this->mcpConfigDirectory === null && $this->approvalDirectory === null) {
+            $done->resolve();
+        } else {
+            $this->loop->defer(fn () => $this->retryCleanup($done, $deadline));
+        }
+
+        return $done;
+    }
+
+    /** @param Deferred<mixed> $done */
+    private function retryCleanup(Deferred $done, float $deadline): void
+    {
+        try {
+            $this->removeMcpConfig(false);
+            $this->removeApprovals(false);
+            if ($this->mcpConfigDirectory === null && $this->approvalDirectory === null) {
+                $done->resolve();
+
+                return;
+            }
+            if (microtime(true) < $deadline && $this->pendingApprovalDeletion()) {
+                $this->loop->delay(min(0.05, max(0.0, $deadline - microtime(true))), fn () => $this->retryCleanup($done, $deadline));
+
+                return;
+            }
+            if ($this->mcpConfigDirectory !== null) {
+                $this->problem('failed to remove temporary Claude MCP configuration', false);
+            }
+            if ($this->approvalDirectory !== null) {
+                $this->problem('failed to remove the temporary Claude permission-prompt directory', false);
+            }
+            $done->resolve();
+        } catch (\Throwable $error) {
+            $done->reject($error);
+        }
+    }
+
+    /** A narrow metadata signature; never delete unknown entries or follow links. */
+    private function pendingApprovalDeletion(): bool
+    {
+        $directory = $this->approvalDirectory;
+        if (PHP_OS_FAMILY !== 'Windows' || $this->mcpConfigDirectory !== null || $directory === null) {
+            return false;
+        }
+        clearstatcache(true, $directory);
+        if (is_link($directory)) {
+            return false;
+        }
+        $entries = @opendir($directory);
+        if ($entries === false) {
+            return false;
+        }
+        $pending = false;
+        try {
+            while (($name = readdir($entries)) !== false) {
+                if ($name === '.' || $name === '..') {
+                    continue;
+                }
+                $path = $directory.DIRECTORY_SEPARATOR.$name;
+                if (! in_array($name, ['approve.php', 'settings.json'], true) || ! in_array($path, $this->approvalFiles, true)) {
+                    return false;
+                }
+                clearstatcache(true, $path);
+                if (is_link($path) || @lstat($path) !== false) {
+                    return false;
+                }
+                $pending = true;
+            }
+        } finally {
+            closedir($entries);
+        }
+
+        return $pending;
+    }
+
+    private function removeMcpConfig(bool $reportFailure = true): void
     {
         if ($this->mcpConfigDirectory === null) {
             return;
         }
         $directory = $this->mcpConfigDirectory;
         $file = $this->mcpConfigPath;
-        $this->mcpConfigDirectory = $this->mcpConfigPath = null;
         if (! PrivateDirectory::remove($directory, ...($file === null ? [] : [$file]))) {
-            $this->problem('failed to remove temporary Claude MCP configuration', true);
+            if ($reportFailure) {
+                $this->problem('failed to remove temporary Claude MCP configuration', false);
+            }
+        } else {
+            $this->mcpConfigDirectory = $this->mcpConfigPath = null;
         }
     }
 
-    private function removeApprovals(): void
+    private function removeApprovals(bool $reportFailure = true): void
     {
         $this->approvals?->close();
         $this->approvals = null;
         $directory = $this->approvalDirectory;
         $files = $this->approvalFiles;
-        $this->approvalDirectory = null;
-        $this->approvalFiles = [];
         if ($directory !== null && ! PrivateDirectory::remove($directory, ...$files)) {
-            $this->problem('failed to remove the temporary Claude permission-prompt directory', true);
+            if ($reportFailure) {
+                $this->problem('failed to remove the temporary Claude permission-prompt directory', false);
+            }
+        } else {
+            $this->approvalDirectory = null;
+            $this->approvalFiles = [];
         }
     }
 

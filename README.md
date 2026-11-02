@@ -135,8 +135,19 @@ them. The shipped CLI has no key arguments. No environment variable in the PHP a
 
 Keys must be non-empty and contain no ASCII control characters; the adapter imposes no prefix or length format.
 The home must be an absolute app/tenant path, separate from the user's default or moved subscription home, including
-case and filesystem aliases. A new home is restricted to the current user before launch; an existing home is accepted
-with the application's chosen permissions. Use the same home to resume its sessions. Separate homes have separate
+case and filesystem aliases. A new home is restricted and independently verified before launch. An existing home must
+already be owned by the current user with exact `0700` permissions on POSIX, or a private ACL with current-user
+FullControl and inheritance disabled on Windows. Every descendant is also checked from permissions and ownership metadata; stored file
+contents are never read, copied or hashed. Windows allow principals are the current owner, SYSTEM and Administrators,
+with every entry owned by the current process SID, or Administrators only under an elevated token with that group enabled.
+Symlinks/reparse points and unverifiable protection are refused. Existing homes
+are never silently chmodded or re-ACL'd. Restore those permissions, or choose a new app-owned home, before retrying.
+Protection is checked again when handing the key or home to the provider. A failed new-directory cleanup raises a
+typed DirectoryCleanupException with kind cleanup_failed; no path, key or unsafe previous exception is attached.
+The fixed verification bounds are depth 16, 16,384 descendants and 30 seconds. `DirectoryProtectionException` reports an
+explicit `depth_limit`, `entry_limit` or `time_limit` reason when a bound is hit. See [credential-home protection](docs/credential-home-protection.md)
+for the metadata policy and manual chmod/icacls repair commands.
+Use the same protected home to resume its sessions. Separate homes have separate
 native settings, MCP servers, skills and history.
 
 Claude receives the explicit key through `ANTHROPIC_API_KEY` and its home through `CLAUDE_CONFIG_DIR`. Codex receives

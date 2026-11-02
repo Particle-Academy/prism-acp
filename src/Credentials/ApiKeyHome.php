@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Prism\Acp\Credentials;
 
 use Prism\Acp\Process\WindowsCommand;
+use Prism\Acp\Support\DirectoryCleanupException;
+use Prism\Acp\Support\DirectoryProtectionException;
 use Prism\Acp\Support\Js;
 use Prism\Acp\Support\PrivateDirectory;
 
-/** Checked key and native home. Existing app-owned homes are accepted; only new homes are made private. */
+/** Checked key and native home. Every admission and handoff verifies owner-only protection. */
 final readonly class ApiKeyHome
 {
     private function __construct(#[\SensitiveParameter] private string $apiKey, public string $home) {}
@@ -54,6 +56,7 @@ final readonly class ApiKeyHome
             if (! is_dir($home)) {
                 throw new \InvalidArgumentException('credentials.home exists and is not a directory');
             }
+            self::verify($home);
         } else {
             $created = false;
             try {
@@ -62,12 +65,15 @@ final readonly class ApiKeyHome
                 }
                 $created = true;
                 PrivateDirectory::protect($home);
-            } catch (\Throwable) {
+                PrivateDirectory::assertProtected($home);
+            } catch (\Throwable $error) {
                 // A failed first attempt must not leave an unprotected home that a retry treats as app-provided.
                 if ($created) {
-                    @rmdir($home);
+                    if (! @rmdir($home)) {
+                        throw new DirectoryCleanupException;
+                    }
                 }
-                throw new \RuntimeException('credentials.home could not be created as a private directory');
+                throw new DirectoryProtectionException(true, $error instanceof DirectoryProtectionException ? $error->reason : 'permissions');
             }
         }
 
@@ -77,12 +83,16 @@ final readonly class ApiKeyHome
     /** @return array<string,string> */
     public function environment(string $provider): array
     {
+        self::verify($this->home);
+
         return $provider === 'claude' ? ['CLAUDE_CONFIG_DIR' => $this->home, 'ANTHROPIC_API_KEY' => $this->apiKey]
             : [self::variable($provider) => $this->home];
     }
 
     public function key(): string
     {
+        self::verify($this->home);
+
         return $this->apiKey;
     }
 
@@ -90,6 +100,17 @@ final readonly class ApiKeyHome
     public function __debugInfo(): array
     {
         return ['home' => $this->home, 'apiKey' => '[redacted]'];
+    }
+
+    private static function verify(#[\SensitiveParameter] string $home): void
+    {
+        try {
+            PrivateDirectory::assertProtected($home);
+        } catch (DirectoryProtectionException $error) {
+            throw new DirectoryProtectionException(true, $error->reason);
+        } catch (\Throwable) {
+            throw new DirectoryProtectionException(true);
+        }
     }
 
     private static function variable(string $provider): string

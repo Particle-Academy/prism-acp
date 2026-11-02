@@ -32,6 +32,7 @@ const receipt={sent:[],versions:[],nativeCode:null,hook:{command:hook.command,ar
 const save=()=>writeFileSync(config.receipt,JSON.stringify(receipt));save();
 const env={...process.env,ANTHROPIC_BASE_URL:config.modelUrl,CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:'1',CLAUDE_CODE_USE_POWERSHELL_TOOL:'0',HTTP_PROXY:config.proxyUrl,HTTPS_PROXY:config.proxyUrl,NO_PROXY:'127.0.0.1,localhost'};
 const native=spawn(config.binary,[...args,'--setting-sources','','--max-turns','2'],{cwd:process.cwd(),env,stdio:['pipe','pipe','pipe'],windowsHide:true});
+receipt.bridgePid=process.pid;receipt.nativePid=native.pid;save();
 createInterface({input:process.stdin}).on('line',line=>{
  const frame=JSON.parse(line);receipt.sent.push({type:frame.type,subtype:frame.request?.subtype});save();native.stdin.write(line+'\n');
 }).on('close',()=>native.stdin.end());

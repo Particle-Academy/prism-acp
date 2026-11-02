@@ -1,5 +1,26 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- Verify dedicated API-key homes and every descendant's ownership, permissions and file type at admission and before
+  credential/provider handoffs. Existing unsafe or unverifiable homes now refuse with an actionable error; the adapter
+  does not rewrite their permissions. Windows permits the current user, SYSTEM and Administrators as allow principals,
+  with every entry owned by the current process SID, or Administrators only under an elevated token with that group enabled.
+  POSIX requires current ownership and no group/other or special bits.
+- Protect new homes, independently verify them, and report failed removal as a typed `cleanup_failed` error.
+- Protect fresh Windows homes by writing access rules only, preserving their natural owner. This also supports
+  app-owned Modify-only parents where rewriting the same owner would require unavailable `WRITE_OWNER` rights.
+  Retry never trusts a residual home merely because it exists. Stored file contents are never opened, read, copied or hashed.
+- Retain temporary Claude configuration and approval-directory cleanup state after a failed removal. After process stop,
+  make a deferred retry. On Windows only known, unstat-able approval entries permit non-blocking retries within a fixed
+  three-second ceiling; unknown entries fail immediately. Exhaustion reports a terminal protocol problem without changing
+  the process-stop verdict or resetting the budget on repeated stops.
+- Bound metadata verification to depth 16, 16,384 descendants and 30 seconds, with explicit safe limit reasons. Symlinks
+  and reparse points refuse the entire tree. See [credential-home protection](docs/credential-home-protection.md) for
+  operator limits and manual permission repair. Subscription authentication remains the default.
+
 ## 0.1.0-alpha.5
 
 BREAKING CHANGE: permission prompts from non-CLI SAPIs now require an explicit absolute trusted `phpBinary`
