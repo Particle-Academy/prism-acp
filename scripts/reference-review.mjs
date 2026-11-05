@@ -6,6 +6,19 @@ export const contracts = Object.freeze({
   nativeTools: '0.29.0', approvalGuard: '0.30.0', replayMarkersAndOptOut: '0.31.0',
   restrictedStartupFlags: '0.32.0', supervisorGenerations: '0.32.0',
   claudeAppMcpOnly: '0.33.0',
+  claudeSettingSources: '0.34.0', claudeStrictMcpConfig: '0.34.0',
+  claudeAppendSystemPromptFile: '0.35.0', claudePluginDirs: '0.35.0', agentVersion: '0.35.0',
+  codexThreadConfig: '0.36.0', ndjsonIncrementalSearch: '0.36.1',
+  claudeQueuedCancelAccounting: '0.37.0',
+});
+
+// Assigned gaps are reviewed alongside release provenance; any numbered placeholder is insufficient.
+const contractGaps = Object.freeze({
+  readRateLimits: 'G-141', mcpServerStatus: 'G-141', appContainerLocal: 'G-141', nativeTools: 'G-141',
+  replayMarkersAndOptOut: 'G-141', restrictedStartupFlags: 'G-141 (G-140)', claudeAppMcpOnly: 'G-141',
+  claudeSettingSources: 'G-233', claudeStrictMcpConfig: 'G-234', claudeAppendSystemPromptFile: 'G-235',
+  claudePluginDirs: 'G-236', codexThreadConfig: 'G-237', ndjsonIncrementalSearch: 'G-232',
+  claudeQueuedCancelAccounting: 'G-238',
 });
 
 function core(version) {
@@ -31,7 +44,9 @@ export function reviewReference(metadata, review, observed) {
     assert(Object.hasOwn(contracts, entry.contract), `Unknown missing contract: ${entry.contract}`);
     assert(!missing.has(entry.contract), `Duplicate missing contract: ${entry.contract}`);
     assert.equal(entry.since, contracts[entry.contract], `Wrong reference release for ${entry.contract}`);
-    assert.match(entry.gap, /^G-141(?: \(G-140\))?$/, `Missing gap citation for ${entry.contract}`);
+    assert.match(entry.gap, /^G-[1-9][0-9]*(?: \(G-140\))?$/, `Missing gap citation for ${entry.contract}`);
+    assert(Object.hasOwn(contractGaps, entry.contract), `No reviewed gap assignment for ${entry.contract}`);
+    assert.equal(entry.gap, contractGaps[entry.contract], `Wrong gap citation for ${entry.contract}`);
     missing.set(entry.contract, entry);
   }
   for (const [name, present] of Object.entries(observed)) {
