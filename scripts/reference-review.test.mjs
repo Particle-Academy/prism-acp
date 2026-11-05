@@ -10,11 +10,11 @@ const observed = {
   approvalGuard: true, replayMarkersAndOptOut: false, restrictedStartupFlags: false,
   supervisorGenerations: true, claudeAppMcpOnly: false, claudeSettingSources: false,
   claudeStrictMcpConfig: false, claudeAppendSystemPromptFile: false, claudePluginDirs: false,
-  agentVersion: true, codexThreadConfig: false, ndjsonIncrementalSearch: false,
+  agentVersion: true, codexThreadConfig: false, ndjsonIncrementalSearch: true,
   claudeQueuedCancelAccounting: false,
 };
 test('reports the reviewed partial port honestly', () => {
-  assert.equal(reviewReference(metadata, review, observed), 'PHP behind TS: PARTIAL (14 contracts missing)');
+  assert.equal(reviewReference(metadata, review, observed), 'PHP behind TS: PARTIAL (13 contracts missing)');
   assert.deepEqual(Object.keys(contracts).sort(), Object.keys(observed).sort());
 });
 test('a newer published version refuses even if latest still names the reviewed release', () => {
@@ -40,17 +40,20 @@ test('unknown and unchecked inventory entries refuse', () => {
 });
 
 for (const contract of ['claudeSettingSources', 'claudeStrictMcpConfig', 'claudeAppendSystemPromptFile',
-  'claudePluginDirs', 'codexThreadConfig', 'ndjsonIncrementalSearch', 'claudeQueuedCancelAccounting']) {
+  'claudePluginDirs', 'codexThreadConfig', 'claudeQueuedCancelAccounting']) {
   test(`${contract} cannot silently disappear from the reviewed gap inventory`, () => {
     const knownMissing = review.knownMissing.filter(entry => entry.contract !== contract);
     assert.throws(() => reviewReference(metadata, {...review, knownMissing}, observed), new RegExp(`Unlisted missing PHP contract: ${contract}`));
   });
 }
 
-test('a landed framing fix must clear its missing entry without clearing other gaps', () => {
-  assert.throws(() => reviewReference(metadata, review, {...observed, ndjsonIncrementalSearch: true}), /Stale knownMissing/);
-  const updated = {...review, knownMissing: review.knownMissing.filter(entry => entry.contract !== 'ndjsonIncrementalSearch')};
-  assert.equal(reviewReference(metadata, updated, {...observed, ndjsonIncrementalSearch: true}), 'PHP behind TS: PARTIAL (13 contracts missing)');
+test('a framing regression cannot disappear from the reviewed inventory', () => {
+  assert.throws(() => reviewReference(metadata, review, {...observed, ndjsonIncrementalSearch: false}), /Unlisted missing/);
+});
+
+test('the implemented framing fix cannot remain on the missing list', () => {
+  const knownMissing = [...review.knownMissing, {contract: 'ndjsonIncrementalSearch', since: '0.36.1', gap: 'G-232'}];
+  assert.throws(() => reviewReference(metadata, {...review, knownMissing}, observed), /Stale knownMissing/);
 });
 
 test('the already implemented default agent version cannot regress unnoticed', () => {

@@ -14,7 +14,6 @@
     {"contract": "claudeAppendSystemPromptFile", "since": "0.35.0", "gap": "G-235"},
     {"contract": "claudePluginDirs", "since": "0.35.0", "gap": "G-236"},
     {"contract": "codexThreadConfig", "since": "0.36.0", "gap": "G-237"},
-    {"contract": "ndjsonIncrementalSearch", "since": "0.36.1", "gap": "G-232"},
     {"contract": "claudeQueuedCancelAccounting", "since": "0.37.0", "gap": "G-238"}
   ]
 }
