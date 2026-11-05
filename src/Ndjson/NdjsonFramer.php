@@ -39,9 +39,28 @@ final class NdjsonFramer
      */
     public function push(string $chunk): array
     {
-        $this->buffer .= $chunk;
+        $frames = [];
+        $offset = 0;
+        // Only the new bytes can contain a newline. The buffer holds one unfinished line, already searched.
+        while (($newline = strpos($chunk, "\n", $offset)) !== false) {
+            $line = $this->buffer.substr($chunk, $offset, $newline - $offset);
+            $this->buffer = '';
+            $offset = $newline + 1;
+            $frame = self::parseLine($line);
+            if ($frame !== null) {
+                $frames[] = $frame;
+            }
+        }
 
-        return $this->drain();
+        // Slice each completed line once instead of copying the remaining chunk after every newline.
+        $this->buffer .= substr($chunk, $offset);
+        $pending = strlen($this->buffer);
+        if ($pending > self::MAX_LINE_BYTES) {
+            $this->buffer = '';
+            $frames[] = Frame::failed(FrameError::oversize($pending));
+        }
+
+        return $frames;
     }
 
     /**
@@ -52,12 +71,11 @@ final class NdjsonFramer
      */
     public function end(): array
     {
-        $frames = $this->drain();
         $rest = $this->buffer;
         $this->buffer = '';
         $frame = $rest === '' ? null : self::parseLine($rest);
 
-        return $frame === null ? $frames : [...$frames, $frame];
+        return $frame === null ? [] : [$frame];
     }
 
     /**
@@ -83,31 +101,6 @@ final class NdjsonFramer
             // The reason, never the line: json_decode's own message can quote the input.
             return Frame::failed(FrameError::invalidJson($bytes));
         }
-    }
-
-    /**
-     * @return list<Frame>
-     */
-    private function drain(): array
-    {
-        $frames = [];
-        while (($newline = strpos($this->buffer, "\n")) !== false) {
-            $line = substr($this->buffer, 0, $newline);
-            $this->buffer = (string) substr($this->buffer, $newline + 1);
-            $frame = self::parseLine($line);
-            if ($frame !== null) {
-                $frames[] = $frame;
-            }
-        }
-
-        // The cap applies to a line still being accumulated, or an endless line would grow the buffer forever.
-        $pending = strlen($this->buffer);
-        if ($pending > self::MAX_LINE_BYTES) {
-            $this->buffer = '';
-            $frames[] = Frame::failed(FrameError::oversize($pending));
-        }
-
-        return $frames;
     }
 
     /** Serialise one value as an NDJSON line, trailing newline included. */
