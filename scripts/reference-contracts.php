@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__.'/reference-framing-probe.php';
+
 // Inspect the installed source without Composer/development dependencies or a provider/model launch.
 spl_autoload_register(function (string $class): void {
     $prefix = 'Prism\\Acp\\';
@@ -13,6 +15,7 @@ spl_autoload_register(function (string $class): void {
     }
 });
 
+use Prism\Acp\Agent\AcpAgent;
 use Prism\Acp\Agent\DriverEvents;
 use Prism\Acp\Async\Loop;
 use Prism\Acp\Claude\Approvals;
@@ -21,9 +24,13 @@ use Prism\Acp\Claude\ClaudeDriverOptions;
 use Prism\Acp\Codex\CodexDriver;
 use Prism\Acp\Codex\CodexDriverOptions;
 use Prism\Acp\Codex\CodexTransportOptions;
+use Prism\Acp\JsonRpc\JsonRpcPeer;
 use Prism\Acp\Meta;
+use Prism\Acp\Ndjson\Json;
+use Prism\Acp\Ndjson\ReferenceFramingProbe;
 use Prism\Acp\Process\Provider;
 use Prism\Acp\Process\WindowsSupervisorBuild;
+use Prism\Acp\Version;
 
 function publicMethod(string $class, string $method): bool
 {
@@ -84,6 +91,34 @@ if ($reader->getNumberOfParameters() === 1) {
 
 $providerParameters = array_map(fn (ReflectionParameter $parameter): string => $parameter->getName(), (new ReflectionMethod(Provider::class, 'launch'))->getParameters());
 $guard = publicMethod(Approvals::class, 'cliVersion') && Approvals::cliVersion('2.1.294') === null && Approvals::cliVersion('2.1.295') === '2.1.295' && Approvals::cliVersion(null) === null;
+
+/** Exercise actual initialize dispatch; this must never construct a provider. */
+function initializedInfo(?array $override = null): object
+{
+    $loop = new Loop;
+    $sent = [];
+    $peer = new JsonRpcPeer(function (mixed $frame) use (&$sent): void {
+        $sent[] = $frame;
+    }, loop: $loop);
+    new AcpAgent($peer, static function (): never {
+        throw new RuntimeException('Inventory initialize unexpectedly requested a provider');
+    }, agentInfo: $override, loop: $loop);
+    $peer->receive(Json::decode('{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}'));
+    $loop->drain();
+    if (count($sent) !== 1) {
+        throw new RuntimeException('Inventory initialize did not respond exactly once');
+    }
+    $response = Json::decode(Json::encode($sent[0]));
+    if (! isset($response->result->agentInfo)) {
+        throw new RuntimeException('Inventory initialize did not return agent info');
+    }
+
+    return $response->result->agentInfo;
+}
+
+$defaultInfo = initializedInfo();
+$overrideInfo = initializedInfo(['name' => 'owned-inventory', 'version' => 'owned-override']);
+$framing = ReferenceFramingProbe::observe();
 echo json_encode([
     'readRateLimits' => publicMethod(CodexDriver::class, 'readRateLimits'),
     'mcpServerStatus' => publicMethod(CodexDriver::class, 'mcpServerStatus') || publicMethod(ClaudeDriver::class, 'mcpServerStatus'),
@@ -94,4 +129,12 @@ echo json_encode([
     'restrictedStartupFlags' => $startupFlags,
     'supervisorGenerations' => $generations,
     'claudeAppMcpOnly' => property_exists(ClaudeDriverOptions::class, 'nativeTools'),
+    'claudeSettingSources' => property_exists(ClaudeDriverOptions::class, 'settingSources'),
+    'claudeStrictMcpConfig' => property_exists(ClaudeDriverOptions::class, 'strictMcpConfig'),
+    'claudeAppendSystemPromptFile' => property_exists(ClaudeDriverOptions::class, 'appendSystemPromptFile'),
+    'claudePluginDirs' => property_exists(ClaudeDriverOptions::class, 'pluginDirs'),
+    'agentVersion' => $defaultInfo->version === Version::VERSION && $overrideInfo->version === 'owned-override',
+    'codexThreadConfig' => property_exists(CodexDriverOptions::class, 'config'),
+    'ndjsonIncrementalSearch' => $framing['incremental'],
+    'claudeQueuedCancelAccounting' => class_exists('Prism\\Acp\\Claude\\ClaudeCancelStateError'),
 ], JSON_THROW_ON_ERROR)."\n";
