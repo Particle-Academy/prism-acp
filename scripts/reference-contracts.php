@@ -17,18 +17,24 @@ spl_autoload_register(function (string $class): void {
 
 use Prism\Acp\Agent\AcpAgent;
 use Prism\Acp\Agent\DriverEvents;
+use Prism\Acp\Agent\TurnOutcome;
+use Prism\Acp\Async\Deferred;
 use Prism\Acp\Async\Loop;
 use Prism\Acp\Claude\Approvals;
 use Prism\Acp\Claude\ClaudeDriver;
 use Prism\Acp\Claude\ClaudeDriverOptions;
 use Prism\Acp\Codex\CodexDriver;
 use Prism\Acp\Codex\CodexDriverOptions;
+use Prism\Acp\Codex\CodexTransport;
+use Prism\Acp\Codex\CodexTransportHandlers;
 use Prism\Acp\Codex\CodexTransportOptions;
 use Prism\Acp\JsonRpc\JsonRpcPeer;
 use Prism\Acp\Meta;
 use Prism\Acp\Ndjson\Json;
 use Prism\Acp\Ndjson\ReferenceFramingProbe;
+use Prism\Acp\Process\ProcessTree;
 use Prism\Acp\Process\Provider;
+use Prism\Acp\Process\StopVerdict;
 use Prism\Acp\Process\WindowsSupervisorBuild;
 use Prism\Acp\Version;
 
@@ -119,6 +125,105 @@ function initializedInfo(?array $override = null): object
 $defaultInfo = initializedInfo();
 $overrideInfo = initializedInfo(['name' => 'owned-inventory', 'version' => 'owned-override']);
 $framing = ReferenceFramingProbe::observe();
+
+/**
+ * Feed a Codex RPC response whose id matches no request, carrying an owned sentinel, through the real driver frame
+ * path, and stop startup before any provider. The reference (0.38.0) reports such a reply without echoing it; present
+ * only when the gap is reported AND the sentinel never reaches an ACP update. No update at all is unmeasured.
+ */
+function uncorrelatedResponseRedacted(): bool
+{
+    $loop = new Loop;
+    $updates = [];
+    $sentinel = 'owned-uncorrelated-sentinel-'.bin2hex(random_bytes(8));
+    $events = new DriverEvents(onUpdate: function (array $update) use (&$updates): void {
+        $updates[] = Json::encode($update);
+    });
+    $factory = function (CodexTransportOptions $options, CodexTransportHandlers $handlers) use ($loop, $sentinel): CodexTransport {
+        return new class($handlers, $loop, $sentinel) implements CodexTransport
+        {
+            public function __construct(private readonly CodexTransportHandlers $handlers, private readonly Loop $loop, private readonly string $sentinel) {}
+
+            public function start(): Deferred
+            {
+                ($this->handlers->onFrame)('{"jsonrpc":"2.0","id":987654321,"result":{"echo":"'.$this->sentinel.'"}}');
+                $done = new Deferred($this->loop);
+                $done->reject(new RuntimeException('owned inventory interception before provider startup'));
+
+                return $done;
+            }
+
+            public function send(mixed $frame): void {}
+
+            public function close(): void {}
+
+            public function stop(int $graceMs = 5000): Deferred
+            {
+                $done = new Deferred($this->loop);
+                $done->resolve(new StopVerdict(true, true, 0, true));
+
+                return $done;
+            }
+
+            public function processTree(): ?ProcessTree
+            {
+                return null;
+            }
+        };
+    };
+    $driver = new CodexDriver(new CodexDriverOptions(cwd: sys_get_temp_dir(), parentEnv: []), $events, $factory, $loop);
+    try {
+        $driver->start();
+        $loop->drain();
+    } finally {
+        $driver->stop(0)->await();
+    }
+    if ($updates === []) {
+        throw new RuntimeException('Inventory uncorrelated-response probe observed no update');
+    }
+    foreach ($updates as $update) {
+        if (str_contains($update, $sentinel)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/** Exercise the real argv builder: rule boundaries kept as separate values, option-shaped/control rules refused. */
+function claudeToolRulesHardened(): bool
+{
+    $args = ClaudeDriver::args(new ClaudeDriverOptions(cwd: sys_get_temp_dir(), allowedTools: ['Bash(git log:*)', 'Read']));
+    $at = array_search('--allowed-tools', $args, true);
+    if ($at === false || ($args[$at + 1] ?? null) !== 'Bash(git log:*)' || ($args[$at + 2] ?? null) !== 'Read') {
+        return false;
+    }
+    foreach ([['allowedTools' => ['--dangerously-skip-permissions']], ['disallowedTools' => ["Read\nBash"]], ['disallowedTools' => ['']]] as $hostile) {
+        try {
+            ClaudeDriver::args(new ClaudeDriverOptions(...['cwd' => sys_get_temp_dir(), ...$hostile]));
+
+            return false;
+        } catch (InvalidArgumentException) {
+        }
+    }
+
+    return true;
+}
+
+/** The reference ships pinned supervisor images and never invokes a compiler at runtime (0.41.0). */
+function invokesRuntimeCompiler(): bool
+{
+    $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(dirname(__DIR__).'/src', FilesystemIterator::SKIP_DOTS));
+    foreach ($files as $file) {
+        if ($file->isFile() && str_contains((string) file_get_contents($file->getPathname()), 'csc.exe')) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+$metaConstants = (new ReflectionClass(Meta::class))->getConstants();
 echo json_encode([
     'readRateLimits' => publicMethod(CodexDriver::class, 'readRateLimits'),
     'mcpServerStatus' => publicMethod(CodexDriver::class, 'mcpServerStatus') || publicMethod(ClaudeDriver::class, 'mcpServerStatus'),
@@ -137,4 +242,14 @@ echo json_encode([
     'codexThreadConfig' => property_exists(CodexDriverOptions::class, 'config'),
     'ndjsonIncrementalSearch' => $framing['incremental'],
     'claudeQueuedCancelAccounting' => class_exists('Prism\\Acp\\Claude\\ClaudeCancelStateError'),
+    'codexSteer' => publicMethod(CodexDriver::class, 'steer'),
+    'rpcRequestDeadline' => (new ReflectionMethod(JsonRpcPeer::class, 'request'))->getNumberOfParameters() > 2 || class_exists('Prism\\Acp\\JsonRpc\\RpcTimeoutError'),
+    'codexUncorrelatedResponseRedaction' => uncorrelatedResponseRedacted(),
+    'codexCommands' => publicMethod(CodexDriver::class, 'runCommand'),
+    'codexToolNames' => in_array('particle.academy/native_item_type', $metaConstants, true),
+    'fileEdits' => in_array('particle.academy/file_edits', $metaConstants, true),
+    'stopVerdictObserver' => property_exists(DriverEvents::class, 'onStopVerdict'),
+    'windowsShippedSupervisor' => ! invokesRuntimeCompiler(),
+    'claudeToolRuleArgv' => claudeToolRulesHardened(),
+    'claudeFoldedPromptSettlement' => property_exists(TurnOutcome::class, 'foldedInto'),
 ], JSON_THROW_ON_ERROR)."\n";

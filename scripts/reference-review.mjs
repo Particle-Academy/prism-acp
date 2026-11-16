@@ -10,6 +10,10 @@ export const contracts = Object.freeze({
   claudeAppendSystemPromptFile: '0.35.0', claudePluginDirs: '0.35.0', agentVersion: '0.35.0',
   codexThreadConfig: '0.36.0', ndjsonIncrementalSearch: '0.36.1',
   claudeQueuedCancelAccounting: '0.37.0',
+  codexSteer: '0.38.0', rpcRequestDeadline: '0.38.0', codexUncorrelatedResponseRedaction: '0.38.0',
+  codexCommands: '0.39.0', codexToolNames: '0.39.0', fileEdits: '0.39.0',
+  stopVerdictObserver: '0.40.0', windowsShippedSupervisor: '0.41.0',
+  claudeToolRuleArgv: '0.41.2', claudeFoldedPromptSettlement: '0.42.0',
 });
 
 // Assigned gaps are reviewed alongside release provenance; any numbered placeholder is insufficient.
@@ -19,6 +23,12 @@ const contractGaps = Object.freeze({
   claudeSettingSources: 'G-233', claudeStrictMcpConfig: 'G-234', claudeAppendSystemPromptFile: 'G-235',
   claudePluginDirs: 'G-236', codexThreadConfig: 'G-237', ndjsonIncrementalSearch: 'G-232',
   claudeQueuedCancelAccounting: 'G-238',
+  // Reviewed through 0.42.0. G-TBD ids are named placeholders, pinned here exactly, until the register numbers them.
+  codexSteer: 'G-TBD-codex-steer', rpcRequestDeadline: 'G-TBD-rpc-request-deadline',
+  codexUncorrelatedResponseRedaction: 'G-TBD-codex-uncorrelated-redaction', codexCommands: 'G-TBD-codex-commands',
+  codexToolNames: 'G-TBD-codex-tool-names', fileEdits: 'G-TBD-file-edits',
+  stopVerdictObserver: 'G-TBD-stop-verdict-observer', windowsShippedSupervisor: 'G-TBD-shipped-supervisor',
+  claudeToolRuleArgv: 'G-TBD-claude-tool-rule-argv', claudeFoldedPromptSettlement: 'G-TBD-claude-fold-settlement',
 });
 
 function core(version) {
@@ -44,7 +54,7 @@ export function reviewReference(metadata, review, observed) {
     assert(Object.hasOwn(contracts, entry.contract), `Unknown missing contract: ${entry.contract}`);
     assert(!missing.has(entry.contract), `Duplicate missing contract: ${entry.contract}`);
     assert.equal(entry.since, contracts[entry.contract], `Wrong reference release for ${entry.contract}`);
-    assert.match(entry.gap, /^G-[1-9][0-9]*(?: \(G-140\))?$/, `Missing gap citation for ${entry.contract}`);
+    assert.match(entry.gap, /^(?:G-[1-9][0-9]*(?: \(G-140\))?|G-TBD-[a-z0-9]+(?:-[a-z0-9]+)*)$/,`Missing gap citation for ${entry.contract}`);
     assert(Object.hasOwn(contractGaps, entry.contract), `No reviewed gap assignment for ${entry.contract}`);
     assert.equal(entry.gap, contractGaps[entry.contract], `Wrong gap citation for ${entry.contract}`);
     missing.set(entry.contract, entry);
