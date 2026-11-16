@@ -10,9 +10,11 @@ final readonly class ProcessTree
     public function __construct(
         public int $providerPid,
         public int $supervisorPid,
-        /** 'job-object' (Windows) or 'process-group' (Linux). */
+        /** 'job-object' (Windows) or 'process-group' (Linux, macOS). */
         public string $containment,
         /** The provider's process group, for 'process-group' containment. */
         public ?int $pgid = null,
+        /** What this containment does NOT hold, in words (see Provider::containment()); null for a Job Object. */
+        public ?string $weakness = null,
     ) {}
 }
