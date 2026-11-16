@@ -71,17 +71,8 @@ final class PrivateDirectory
             if (PHP_OS_FAMILY === 'Windows') {
                 self::windowsPermissions($directory, false, $deadline);
             } else {
-                $id = is_executable('/usr/bin/id') ? '/usr/bin/id' : '/bin/id';
-                $result = self::run([$id, '-u'], ChildEnv::build(getenv())->env, $deadline);
-                $effective = trim($result['output']);
-                if ($result['exit'] !== 0) {
-                    throw new DirectoryProtectionException;
-                }
-                if (! ctype_digit($effective) || (string) (int) $effective !== $effective) {
-                    throw new DirectoryProtectionException;
-                }
                 $entries = 0;
-                self::verifyPosixNode($directory, (int) $effective, 0, $entries, $deadline);
+                self::verifyPosixNode($directory, self::effectiveUid($deadline), 0, $entries, $deadline);
             }
         } catch (DirectoryProtectionException $error) {
             throw $error;
@@ -104,6 +95,25 @@ final class PrivateDirectory
         }
 
         return $ok;
+    }
+
+    /** This process's effective uid: from ext-posix when it is loaded (as containment requires), else `id -u`. */
+    private static function effectiveUid(float $deadline): int
+    {
+        if (function_exists('posix_geteuid')) {
+            return posix_geteuid();
+        }
+        $id = is_executable('/usr/bin/id') ? '/usr/bin/id' : '/bin/id';
+        $result = self::run([$id, '-u'], ChildEnv::build(getenv())->env, $deadline);
+        $effective = trim($result['output']);
+        if ($result['exit'] !== 0) {
+            throw new DirectoryProtectionException;
+        }
+        if (! ctype_digit($effective) || (string) (int) $effective !== $effective) {
+            throw new DirectoryProtectionException;
+        }
+
+        return (int) $effective;
     }
 
     /** Metadata only: directory enumeration and lstat never open file contents or follow links. */

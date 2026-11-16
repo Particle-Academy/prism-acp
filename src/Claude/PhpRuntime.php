@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Prism\Acp\Claude;
 
 use Prism\Acp\Env\ChildEnv;
+use Prism\Acp\Process\PosixCommand;
 use Prism\Acp\Process\ProcessTreeException;
 use Prism\Acp\Process\Provider;
 use Prism\Acp\Process\WindowsCommand;
@@ -20,7 +21,8 @@ final class PhpRuntime
             }
             $given = PHP_BINARY;
         }
-        if ($given === '' || preg_match('/[\x00\r\n]/', $given) === 1 || ! WindowsCommand::isAbsolute($given) || ! is_file($given)) {
+        $absolute = PHP_OS_FAMILY === 'Windows' ? WindowsCommand::isAbsolute($given) : PosixCommand::isAbsolute($given);
+        if ($given === '' || preg_match('/[\x00\r\n]/', $given) === 1 || ! $absolute || ! is_file($given)) {
             throw new ProcessTreeException('Claude permission prompts require an absolute existing PHP CLI path');
         }
         $path = realpath($given);

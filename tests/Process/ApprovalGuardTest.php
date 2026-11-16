@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 use Prism\Acp\Claude\Approvals;
 use Prism\Acp\Env\ChildEnv;
+use Prism\Acp\Process\Provider;
 use Prism\Acp\Process\WindowsProviderProcess;
 use Prism\Acp\Process\WindowsSupervisorBuild;
 use Prism\Acp\Support\PrivateDirectory;
+use Tests\Support\TreeProbe;
 
 /** @return array{code: int|null, stdout: string, stderr: string, expired: bool, contacted: bool} */
 function approvalGuardRun(string $script, ?string $reply = null, string $input = '{}'): array
@@ -29,7 +31,14 @@ function approvalGuardRun(string $script, ?string $reply = null, string $input =
     $err = '';
     $contacted = false;
     try {
-        $provider = WindowsProviderProcess::launch(WindowsSupervisorBuild::executable(), ['approval', PHP_BINARY, $path, '1'], $directory, ChildEnv::build(getenv(), set: $env)->env);
+        $childEnv = ChildEnv::build(getenv(), set: $env)->env;
+        if (PHP_OS_FAMILY === 'Windows') {
+            $provider = WindowsProviderProcess::launch(WindowsSupervisorBuild::executable(), ['approval', PHP_BINARY, $path, '1'], $directory, $childEnv);
+        } else {
+            // Exactly the command and argv Claude would be handed, from the settings this package writes.
+            $hook = Approvals::settings(PHP_BINARY, $path, ['Bash'], 1)['hooks']['PreToolUse'][0]['hooks'][0];
+            $provider = Provider::launch($hook['command'], $hook['args'], $directory, $childEnv);
+        }
         $provider->write($input);
         $provider->closeInput();
         if (is_resource($server)) {
@@ -76,8 +85,13 @@ function approvalGuardRun(string $script, ?string $reply = null, string $input =
     }
 }
 
-describe('Windows native PHP approval guard', function () {
+describe('the PHP approval guard (the native Windows adapter, or the POSIX /bin/sh guard)', function () {
     it('maps only the script explicit-allow status to success', function (string $script, int $expected) {
+        if (PHP_OS_FAMILY !== 'Windows' && $script === '<?php sleep(30);') {
+            // The Windows adapter enforces its own deadline. The POSIX guard has none of its own (macOS has no
+            // timeout(1)): there, Claude's hook timeout ends a hung hook, and the hook is onFailure:block.
+            $this->markTestSkipped('POSIX relies on Claude\'s hook timeout for a hung hook; see Approvals::posixSettings');
+        }
         $result = approvalGuardRun($script);
         expect($result['expired'])->toBeFalse()->and($result['code'])->toBe($expected);
         if ($expected === 2) {
@@ -96,6 +110,9 @@ describe('Windows native PHP approval guard', function () {
     ]);
 
     it('validates the channel answer before producing the internal allow status', function (string $reply, bool $allows) {
+        if (PHP_OS_FAMILY !== 'Windows' && $reply === 'hang') {
+            $this->markTestSkipped('POSIX relies on Claude\'s hook timeout (and the channel\'s own deadline) for a stalled channel');
+        }
         $result = approvalGuardRun(Approvals::HOOK_SCRIPT, $reply);
         expect($result['expired'])->toBeFalse()->and($result['code'])->toBe($allows ? 0 : 2);
         if ($reply === 'hang') {
@@ -128,4 +145,15 @@ describe('Windows native PHP approval guard', function () {
         $result = approvalGuardRun(Approvals::HOOK_SCRIPT, "200\n{}", $input);
         expect($result['expired'])->toBeFalse()->and($result['code'])->toBe(2)->and($result['contacted'])->toBeFalse();
     })->with(['null', '[]', '{invalid', "{\"tool_name\":\"\xff\"}"]);
-})->skip(PHP_OS_FAMILY !== 'Windows', 'native Windows adapter only');
+})->skip(! TreeProbe::containmentHere(), TreeProbe::skipReason());
+
+it('POSIX: the guard passes the PHP CLI and hook as arguments, never as shell source', function () {
+    $hook = Approvals::settings('/opt/php $(touch x)/bin/php', "/tmp/a ' \" ; hook.php", ['*'], 60)['hooks']['PreToolUse'][0];
+    expect($hook['matcher'])->toBe('')
+        ->and($hook['hooks'][0]['command'])->toBe('/bin/sh')
+        ->and($hook['hooks'][0]['onFailure'])->toBe('block')
+        ->and($hook['hooks'][0]['timeout'])->toBe(65)
+        ->and(array_slice($hook['hooks'][0]['args'], 2))->toBe(['prism-acp-approval', '/opt/php $(touch x)/bin/php', "/tmp/a ' \" ; hook.php"])
+        ->and($hook['hooks'][0]['args'][1])->not->toContain('touch')->not->toContain('hook.php');
+    expect(fn () => Approvals::settings('php', '/tmp/hook.php', ['Bash']))->toThrow(InvalidArgumentException::class, 'absolute');
+})->skip(! in_array(PHP_OS_FAMILY, ['Linux', 'Darwin'], true) || ! TreeProbe::supported(), 'the POSIX guard');

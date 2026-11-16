@@ -6,6 +6,8 @@ namespace Prism\Acp\Claude;
 
 use Prism\Acp\Agent\PermissionOutcome;
 use Prism\Acp\Process\ContainmentUnavailable;
+use Prism\Acp\Process\PosixCommand;
+use Prism\Acp\Process\PosixTree;
 use Prism\Acp\Process\WindowsCommand;
 use Prism\Acp\Process\WindowsSupervisorBuild;
 use Prism\Acp\Support\Js;
@@ -26,6 +28,9 @@ final class Approvals
 {
     /** How long a call may wait for a person, in seconds: a person may be away. */
     public const WAIT_SECONDS = 86_400;
+
+    /** The hook script's exit for an explicit allow, which only the guard turns into success. */
+    private const EXPLICIT_ALLOW = 42;
 
     /**
      * The hook Claude runs: its stdin is the hook input; it sends the token and that input over the channel named in
@@ -136,7 +141,7 @@ final class Approvals
         }
         $wait = self::waitSeconds($timeoutSeconds);
         if (PHP_OS_FAMILY !== 'Windows') {
-            throw new ContainmentUnavailable('Claude permission prompts require the native Windows approval adapter in this release');
+            return self::posixSettings($phpBinary, $hookPath, $tools, $wait);
         }
         foreach ([$phpBinary, $hookPath] as $path) {
             if ($path === '' || preg_match('/[\x00\r\n]/', $path) === 1 || ! WindowsCommand::isAbsolute($path)) {
@@ -150,6 +155,37 @@ final class Approvals
             // Only this explicit sentinel selects it; tool names can never inject a regular expression.
             'matcher' => $tools === ['*'] ? '' : implode('|', $tools),
             'hooks' => [['type' => 'command', 'command' => $adapter, 'args' => ['approval', $phpBinary, $hookPath, (string) $wait], 'timeout' => $wait + 5, 'onFailure' => 'block']],
+        ]]]];
+    }
+
+    /**
+     * Linux and macOS: the reference's exec-form POSIX guard, /bin/sh with the PHP CLI and hook path as positional
+     * arguments ("$1" "$2"), never interpolated into its source. The same PHP flags as the Windows adapter: no inherited
+     * ini (so no auto_prepend_file can run before the hook), diagnostics to a discarded stderr. Only exit 42 becomes 0;
+     * every other completion prints the block message and exits 2. A hook that never finishes is ended by Claude's own
+     * hook timeout, which is `onFailure: block`.
+     *
+     * @param  list<string>  $tools
+     * @return array<string, mixed>
+     */
+    private static function posixSettings(string $phpBinary, string $hookPath, array $tools, int $wait): array
+    {
+        $missing = PosixTree::missing();
+        if ($missing !== []) {
+            throw new ContainmentUnavailable('Claude permission prompts need provider containment, which this platform lacks: '.implode(', ', $missing));
+        }
+        foreach ([$phpBinary, $hookPath] as $path) {
+            if ($path === '' || preg_match('/[\x00\r\n]/', $path) === 1 || ! PosixCommand::isAbsolute($path)) {
+                throw new \InvalidArgumentException('permission hook paths must be absolute single-line paths');
+            }
+        }
+        $guard = '"$1" -n -d display_errors=stderr -d log_errors=0 -d html_errors=0 "$2" 2>/dev/null; code=$?; '
+            .'if [ "$code" -eq '.self::EXPLICIT_ALLOW.' ]; then exit 0; fi; '
+            ."printf '%s\\n' 'prism-acp: approval hook failed or denied; tool call blocked' >&2; exit 2";
+
+        return ['hooks' => ['PreToolUse' => [[
+            'matcher' => $tools === ['*'] ? '' : implode('|', $tools),
+            'hooks' => [['type' => 'command', 'command' => '/bin/sh', 'args' => ['-c', $guard, 'prism-acp-approval', $phpBinary, $hookPath], 'timeout' => $wait + 5, 'onFailure' => 'block']],
         ]]]];
     }
 

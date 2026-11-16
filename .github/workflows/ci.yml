@@ -22,6 +22,10 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest]
         php: ['8.2', '8.4', '8.5']
+        include:
+          # macOS: process-group containment only (labelled weaker); one PHP version is enough to measure it.
+          - os: macos-latest
+            php: '8.4'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -99,14 +103,33 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: ${{ matrix.php }}
-          extensions: mbstring
+          extensions: ${{ runner.os == 'Windows' && 'mbstring' || 'mbstring, pcntl, posix' }}
           coverage: none
           tools: composer:v2
       - name: Resolve current compatible dependencies
         run: composer update --prefer-dist --no-interaction --no-progress
       - run: composer validate --strict
       - run: composer audit
+      - name: POSIX containment is available here, so its tests cannot skip
+        if: runner.os != 'Windows'
+        run: php scripts/check-posix-containment.php
       - run: composer test -- --compact
+      - name: POSIX containment tests, with every skip and its reason shown
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          code=0
+          php vendor/bin/pest tests/Process/PosixProcessTreeTest.php tests/Process/PosixTreeTest.php tests/Unit/PosixPrivateDirectoryTest.php tests/Process/ApprovalGuardTest.php --display-skipped > posix-containment.log 2>&1 || code=$?
+          cat posix-containment.log
+          exit $code
+      - name: Linux cgroup v2 containment, inside a cgroup delegated to this user
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          code=0
+          bash tools/ci/delegated-cgroup.sh bash -c 'php scripts/check-posix-containment.php cgroup && php vendor/bin/pest tests/Process/PosixCgroupTest.php tests/Process/PosixProcessTreeTest.php tests/Process/ClaudeDriverTest.php tests/Process/CodexDriverTest.php tests/Process/ApprovalGuardTest.php tests/Process/StdioTest.php --display-skipped' > cgroup-containment.log 2>&1 || code=$?
+          cat cgroup-containment.log
+          exit $code
       - name: Consumer installation without development dependencies
         shell: bash
         run: |
@@ -201,7 +224,9 @@ jobs:
       - run: composer types
       - run: php vendor/bin/pint --test
       - run: composer rector
-      - run: composer-require-checker check composer.json
+      # ext-pcntl/ext-posix are suggested, not required, so a Windows install never needs them. Only their few symbols
+      # are listed in this config; any other unknown symbol still fails.
+      - run: composer-require-checker check --config-file=composer-require-checker.json composer.json
       - run: php -l bin/prism-acp
       - run: php bin/prism-acp --version
       - run: git diff --exit-code

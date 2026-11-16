@@ -3,9 +3,10 @@
 Speak the Agent Client Protocol to Claude or Codex from plain PHP or an application that uses PHP, through a signed-in
 subscription or an API key supplied by the app. The core has no third-party runtime dependencies and does not require Laravel.
 
-**Windows only, for Claude and Codex.** Linux/macOS process containment is not implemented;
-those platforms are refused before a provider starts. Laravel applications can use the core classes;
-automatic service-provider discovery and an artisan command are not included.
+**Windows, Linux and macOS, for Claude and Codex.** Containment is not equally strong on all three; see
+[Process ownership and environment](#process-ownership-and-environment). **macOS is weaker:** a descendant that leaves
+the provider's process group escapes a stop. Other platforms are refused before a provider starts. Laravel applications
+can use the core classes; automatic service-provider discovery and an artisan command are not included.
 
 ## Install
 
@@ -13,10 +14,18 @@ automatic service-provider discovery and an artisan command are not included.
 composer require particle-academy/prism-acp
 ```
 
-Requires PHP 8.2 or newer, `ext-ctype`, `ext-json`, `ext-mbstring`, Windows with the .NET Framework 4 C# compiler, and an installed,
-Claude or Codex CLI. The shipped command uses its signed-in subscription; embedders can supply API keys as shown below.
-The supervisor is compiled locally from the included C# source and hash-checked on every
-launch. Node is needed only if the chosen installation is an npm shim; it is not a PHP runtime dependency.
+Requires PHP 8.2 or newer, `ext-ctype`, `ext-json`, `ext-mbstring`, and an installed Claude or Codex CLI. The shipped
+command uses its signed-in subscription; embedders can supply API keys as shown below.
+
+- **Windows:** the .NET Framework 4 C# compiler. The supervisor is compiled locally from the included C# source and
+  hash-checked on every launch.
+- **Linux:** `ext-pcntl`, `ext-posix` and a readable `/proc`. **macOS:** `ext-pcntl` and `ext-posix`. These are
+  suggested rather than required in `composer.json`, so a Windows install never needs them; without them a launch
+  refuses with `ContainmentUnavailable`, naming what is missing, before anything starts. The supervisor runs in a PHP
+  CLI: `PHP_BINARY` when the host is the CLI, otherwise one named once with
+  `PosixProviderProcess::useSupervisorPhp('/usr/bin/php')`.
+
+Node is needed only if the chosen installation is an npm shim; it is not a PHP runtime dependency.
 
 ## Run as an ACP agent
 
@@ -76,12 +85,18 @@ tool identifiers, such as `['Bash', 'Write']`. Omitting it leaves permission han
 an embedding application must choose its policy deliberately. Explicit per-session MCP configuration is supported.
 
 The hook interpreter defaults to `PHP_BINARY` only when the embedding SAPI is `cli`. For CGI, FPM, phpdbg,
-CLI-server or another embedded SAPI, supply `phpBinary: 'C:/absolute/path/php.exe'` in trusted constructor options.
-An implicit PATH lookup is refused. The package probes that executable as a working PHP CLI under containment
-before creating the hook configuration. An explicit CGI/debugger executable is refused too. This changes the
-previous non-CLI fallback; it does not add Linux/macOS provider containment. The optional trusted
-`permissionTimeoutSeconds` ranges from 1 to 86400 (default 86400); the channel and native guard expire before the
-CLI's hook timeout. Both options survive `forSession()` and cannot be supplied through ACP.
+CLI-server or another embedded SAPI, supply `phpBinary: 'C:/absolute/path/php.exe'` (or `/usr/bin/php`) in trusted
+constructor options. An implicit PATH lookup is refused. The package probes that executable as a working PHP CLI under
+containment before creating the hook configuration. An explicit CGI/debugger executable is refused too. The optional
+trusted `permissionTimeoutSeconds` ranges from 1 to 86400 (default 86400). Both options survive `forSession()` and
+cannot be supplied through ACP.
+
+The hook's guard differs by platform. On Windows it is the native adapter, which enforces its own deadline before the
+CLI's hook timeout. On Linux and macOS it is `/bin/sh` with the PHP CLI and hook path passed as positional arguments,
+never as shell source. Only the hook's explicit-allow status becomes success. This guard has no deadline of its own,
+because macOS has no `timeout(1)`. The approval channel still denies at `permissionTimeoutSeconds`, and Claude's own
+hook timeout (`onFailure: block`) ends a hook that hangs before it reaches the channel. The channel is a Unix socket
+in a private 0700 directory, and every request carries the session's token.
 
 Concurrent Windows first launches publish digest-named supervisor generations before atomically replacing a small
 digest pointer. Every reader validates the pointer, filename and actual bytes. Existing generations remain available
@@ -169,13 +184,57 @@ child environment. The script leaves its dummy fixture root for explicit cleanup
 
 ## Process ownership and environment
 
-Every provider and the Windows stdin relay enter a Job Object before their first instruction. Kill-on-close and
-no breakaway cover descendants, including detached grandchildren. Losing the host's control connection terminates
-the job even when the relay is blocked reading stdin. A stop returns `{graceful, empty, survivors, verified}`;
-`verified: false` means no supervisor observation was obtained and must not be reported as proven cleanup.
+Every provider runs under a supervisor that owns its whole process tree: the CLI, its MCP servers, and the shells and
+tool subprocesses they start. The tree ends on stop, on kill, when the CLI exits on its own, and when the host dies,
+a hard kill included. What a stop can still miss depends on the platform:
 
-Commands use argument arrays and never a shell. Relative binary paths and arbitrary batch files are refused;
-recognized npm shims resolve to Node plus their script. Child environments use an allowlist. Credentials that
+| platform | containment | what it holds | what it does NOT hold |
+|---|---|---|---|
+| Windows | Job Object (`job-object`) | every descendant: the provider is assigned to the job, with kill-on-close and no breakaway, before its first instruction | nothing in the tree can leave the job |
+| Linux, `cgroup` mode | the provider's own cgroup v2 (`cgroup`) | every descendant: the provider moves itself into a fresh cgroup before it runs, so everything it starts is born there, whatever it does with `setsid`, its environment or its parent; plus the process group and parent chain. **No environment is read.** | a same-user descendant that deliberately writes its own pid into another cgroup of this user's delegation, **and** leaves the group, **and** is orphaned. The kernel allows a delegated user to move its own processes within the delegation. Root or `CAP_SYS_ADMIN` can move anything. |
+| Linux, `process-group+proc` fallback | process group plus `/proc` (`process-group`) | the provider's group, plus every descendant found by parent chain or by a per-launch `PRISM_ACP_TREE_ID` marker in its environment, including a child that called `setsid` and was then orphaned | **G-92:** a descendant that clears its environment, leaves the group and is orphaned before the stop. **Reads** the environment of this user's processes, to check for the marker. |
+| macOS | process group only (`process-group`) | the provider's group | **weaker:** any descendant that leaves the group (`setsid`, `setpgid`) escapes, and the verdict cannot see it |
+| anything else | none | | refused with `ContainmentUnavailable` before anything starts |
+
+`Provider::containment()` reports the kind, the mode and the weakness before a launch. On the Linux fallback it also
+reports why cgroup mode was unavailable. It throws `ContainmentUnavailable` naming what is missing.
+`ProcessTree::$containment` and `ProcessTree::$weakness` report the mode a launch actually got.
+
+**How a Linux host gets `cgroup` mode.** The host process's own cgroup must be cgroup v2, delegated to the user it
+runs as, and have no controllers enabled for its children (`cgroup.subtree_control` empty). The package finds it from
+`/proc/self/cgroup` and the cgroup2 mount, and creates `prism-acp-<16 hex>` cgroups under it. It never uses `sudo`,
+root or `systemd` itself, and cgroup mode needs neither `cgroup.kill` (kernel 5.14+) nor controllers. Without
+`cgroup.kill` it freezes the cgroup and kills each member until the cgroup is empty. With systemd, any of these gives
+the host such a cgroup:
+
+- a systemd user service with `Delegate=yes`;
+- a system service with `User=` and `Delegate=yes`;
+- `systemd-run --user --scope -p Delegate=yes php your-host.php`.
+
+A queue worker or PHP CLI started from a login shell is usually not delegated, and gets the fallback. Provider
+cgroups left behind by a crashed supervisor are removed on the next launch, but only empty ones with exactly that
+name.
+
+**What the fallback reads.** Only in `process-group+proc` mode does the supervisor read `/proc/<pid>/environ`, for
+this user's processes, at most 4 MiB each. It checks only whether the launch's marker is present. Nothing read is
+kept, logged or returned. cgroup mode reads no process's environment.
+
+On Windows the stdin relay enters the job as well. Losing the host's control connection terminates the job, even when
+the relay is blocked reading stdin. On Linux and macOS the supervisor is a separate PHP CLI process outside the
+provider's group and cgroup. It ends the tree when its private Unix control socket closes, which the kernel does when
+the host dies, even by `SIGKILL`. A pid found through `/proc` is signalled only while its start time still matches, so
+a reused pid is never touched (start times come from `/proc`, so this applies on Linux). In cgroup mode, only
+processes listed in the provider's own cgroup are killed. Every descriptor the host holds beyond stdio is replaced
+with `/dev/null` for the supervisor. The provider therefore inherits none of the host's files, sockets or listeners.
+
+A stop returns `{graceful, empty, survivors, verified}`. `verified: false` means no supervisor observation was
+obtained, and must not be reported as proven cleanup. On Windows the kernel still ends the job, so `empty` is true. On
+Linux and macOS nothing ends a process group for you, so it is false. On Linux `empty` covers what the mode holds: the
+cgroup, group and parent chain, or the group, parent chain and marker. On macOS it covers the group only.
+
+Commands use argument arrays and never a shell. Relative binary paths and arbitrary batch files are refused.
+Recognized npm shims resolve to Node plus their script on Windows. On Linux and macOS a bare name is looked up on the
+child's `PATH`, never in the working directory. Child environments use an allowlist. Credentials that
 override a CLI subscription, including `ANTHROPIC_API_KEY` and `OPENAI_API_KEY`, are withheld by default.
 Temporary approval/MCP files have restricted permissions. The package emits no telemetry.
 
@@ -200,9 +259,21 @@ These conservative inventory probes require review of surface changes; native sa
 are checked separately. The reviewed version advances only in a reviewed change, never automatically.
 
 Windows CI runs fake-provider protocol and real process-tree tests, including a host hard kill while relay input
-stays open. Ubuntu checks the portable primitives and verifies that unsupported containment refuses before spawn.
-No CI job signs in to a provider or runs a live model turn. A prior local Windows Claude session and resume were
-dogfooded in Prism Labs; native Linux live verification has not been performed.
+stays open. Ubuntu (PHP 8.2, 8.4, 8.5) and macOS (PHP 8.4) CI run the same fake-provider driver tests under POSIX
+containment, plus real process trees whose grandchild calls `setsid`. On Linux they cover the orphaned `setsid`
+descendant ended through its cookie, the pid-reuse guard, a host `SIGKILL`, no inherited host descriptors, and
+missing `ext-pcntl`/`ext-posix` refusing before spawn. The G-92 hole and macOS's group-only limit are asserted as they
+are, not skipped. Ubuntu then reruns the cgroup, tree and driver suites inside a cgroup v2 delegated to the job's user,
+using `tools/ci/delegated-cgroup.sh`. The run fails unless cgroup mode is actually active. Those tests cover:
+
+- the env-cleared, `setsid`, orphaned descendant ended (through `cgroup.kill`, and again through freeze-and-kill);
+- a host `SIGKILL`;
+- an observed supervisor proving that no environment is read, even when every read would throw;
+- the stale-cgroup sweep leaving populated, nested and foreign-named cgroups alone;
+- the residual escape by deliberate cgroup migration, asserted as it is.
+
+No CI job signs in to a provider or runs a live model turn. A prior local Windows Claude session and
+resume were dogfooded in Prism Labs. No live Claude or Codex CLI has been run on Linux or macOS under this package.
 
 From a source checkout, the optional `node tools/native/codex-mcp.mjs PHP_EXE CODEX_EXE [INSTALLED_AUTOLOAD]`
 control uses native Codex 0.163.0 with an owned
