@@ -158,6 +158,9 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         ?Loop $loop = null,
     ) {
         $this->loop = $loop ?? Loop::get();
+        // Refused at construction, before any CLI process, as the reference does.
+        ClaudeToolRuleError::rules($options->allowedTools, 'allowedTools');
+        ClaudeToolRuleError::rules($options->disallowedTools, 'disallowedTools');
         $this->disabledMcpServers = McpServers::readDisabled($options->disabledMcpServers, $options->mcpServers);
         $this->framer = new NdjsonFramer;
         $this->mapper = new ClaudeToAcp;
@@ -190,13 +193,15 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
             $args[] = '--model';
             $args[] = Meta::assertModel($options->model);
         }
-        if ($options->allowedTools !== []) {
-            $args[] = '--allowed-tools';
-            $args[] = implode(',', $options->allowedTools);
+        $allowedTools = ClaudeToolRuleError::rules($options->allowedTools, 'allowedTools');
+        $disallowedTools = ClaudeToolRuleError::rules($options->disallowedTools, 'disallowedTools');
+        // G-305, as the reference since 0.41.2: both flags are variadic (<tools...>). Keep caller-supplied rule
+        // boundaries rather than adding delimiters.
+        if ($allowedTools !== []) {
+            array_push($args, '--allowed-tools', ...$allowedTools);
         }
-        if ($options->disallowedTools !== []) {
-            $args[] = '--disallowed-tools';
-            $args[] = implode(',', $options->disallowedTools);
+        if ($disallowedTools !== []) {
+            array_push($args, '--disallowed-tools', ...$disallowedTools);
         }
         if ($options->mcpServers !== [] && $mcpConfigPath === null) {
             throw new \InvalidArgumentException('ClaudeDriver::args requires an MCP config file path when mcpServers is non-empty');

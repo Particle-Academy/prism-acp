@@ -36,6 +36,9 @@ final class CodexDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, R
     public const CAPABILITIES = ['permissionRequests' => true, 'transcriptReplay' => true,
         'mcpCapabilities' => ['http' => true, 'sse' => false], 'promptBlocks' => ['text', 'image', 'resource-text'], 'cancel' => true];
 
+    /** The reference's fixed report for a reply that matches no request (0.38.0). */
+    public const UNCORRELATED_RESPONSE = 'Codex RPC response could not be correlated';
+
     private const APPROVAL_METHODS = ['item/commandExecution/requestApproval', 'item/fileChange/requestApproval',
         'item/permissions/requestApproval', 'applyPatchApproval', 'execCommandApproval'];
 
@@ -230,7 +233,12 @@ final class CodexDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, R
         $transport = ($this->transportFactory)(new CodexTransportOptions($this->options->cwd, $built->env, $this->options->binary, $this->options->binaryArgs), $handlers);
         $this->transport = $transport;
         $this->peer = new JsonRpcPeer(send: fn (mixed $frame) => $transport->send($frame),
-            onProtocolError: fn (string $problem, mixed $frame) => $this->unmapped($problem, $frame), loop: $this->loop);
+            // G-299, as the reference since 0.38.0: a reply this peer cannot correlate may echo our input, private
+            // paths or provider error data. Its body, id and problem text are never forwarded. Every frame reaching
+            // this peer lacks a string method (receive() routes the others), so none is echoed, including a
+            // non-string method the reference would still copy.
+            onProtocolError: fn (string $problem, mixed $frame) => $this->unmapped(self::UNCORRELATED_RESPONSE, (object) ['type' => 'rpc_response_gap']),
+            loop: $this->loop);
         $transport->start()->await();
         $peer = $this->requirePeer();
         // Intentionally mirrors the pinned reference; G-100 owns package-derived identity in all entry points.

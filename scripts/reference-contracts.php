@@ -193,17 +193,20 @@ function uncorrelatedResponseRedacted(): bool
 /** Exercise the real argv builder: rule boundaries kept as separate values, option-shaped/control rules refused. */
 function claudeToolRulesHardened(): bool
 {
-    $args = ClaudeDriver::args(new ClaudeDriverOptions(cwd: sys_get_temp_dir(), allowedTools: ['Bash(git log:*)', 'Read']));
+    $args = ClaudeDriver::args(new ClaudeDriverOptions(cwd: sys_get_temp_dir(), allowedTools: ['Bash(echo a, b)', 'Read']));
     $at = array_search('--allowed-tools', $args, true);
-    if ($at === false || ($args[$at + 1] ?? null) !== 'Bash(git log:*)' || ($args[$at + 2] ?? null) !== 'Read') {
+    if ($at === false || ($args[$at + 1] ?? null) !== 'Bash(echo a, b)' || ($args[$at + 2] ?? null) !== 'Read') {
         return false;
     }
-    foreach ([['allowedTools' => ['--dangerously-skip-permissions']], ['disallowedTools' => ["Read\nBash"]], ['disallowedTools' => ['']]] as $hostile) {
+    foreach ([['allowedTools' => ['--permission-mode']], ['allowedTools' => ["\u{00A0}-p"]], ['disallowedTools' => ["Read\nBash"]], ['disallowedTools' => ['']]] as $hostile) {
         try {
             ClaudeDriver::args(new ClaudeDriverOptions(...['cwd' => sys_get_temp_dir(), ...$hostile]));
 
             return false;
-        } catch (InvalidArgumentException) {
+        } catch (InvalidArgumentException $refused) {
+            if (get_class($refused) !== 'Prism\\Acp\\Claude\\ClaudeToolRuleError') {
+                return false;
+            }
         }
     }
 
