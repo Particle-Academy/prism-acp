@@ -14,6 +14,7 @@ use Prism\Acp\Codex\CodexTransportOptions;
 use Prism\Acp\Codex\StdioCodexTransport;
 use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Process\StopVerdict;
+use Tests\Support\TreeProbe;
 
 /** A synthetic peer over real pipes and Job Object containment, independent of the injected oracle transport. */
 final class CodexHarness
@@ -166,7 +167,7 @@ describe('CodexDriver against a contained process', function () {
             expect($h->cli()[0]['argv'])->toBe(['app-server', '--listen', 'stdio://'])
                 ->and($h->cli()[0]['env'])->not->toContain('OPENAI_API_KEY')
                 ->and($h->driver->withheldCredentials())->toContain('OPENAI_API_KEY')
-                ->and($h->driver->processTree()?->containment)->toBe('job-object')
+                ->and($h->driver->processTree()?->containment)->toBe(PHP_OS_FAMILY === 'Windows' ? 'job-object' : 'process-group')
                 ->and($h->said())->toBe('echo: hello π😀')
                 ->and(array_column($models['availableModels'], 'modelId'))->toBe(['fixture-model', 'second'])
                 ->and($h->requests('thread/start')[0]['params'])->toMatchArray(['approvalPolicy' => 'on-request', 'sandbox' => 'read-only', 'model' => 'fixture-model']);
@@ -290,4 +291,4 @@ describe('CodexDriver against a contained process', function () {
             $transport->stop(1000)->await();
         }
     });
-})->skip(PHP_OS_FAMILY !== 'Windows', 'The PHP provider transport currently supports Windows Job Objects only');
+})->skip(! TreeProbe::containmentHere(), TreeProbe::skipReason());

@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Prism\Acp\Ndjson\Json;
+use Tests\Support\TreeProbe;
 
 /*
  * THE AGENT, AS A CLIENT SEES IT: a separate process speaking ACP on its stdin and stdout. tests/fixtures/agent-host.php
@@ -140,7 +141,7 @@ describe('the agent over stdio', function () {
         } finally {
             expect($client->close())->toBe(0);
         }
-    })->skip(! array_filter(explode(PATH_SEPARATOR, (string) getenv('PATH')), fn (string $path) => is_file(rtrim($path, '\\/').'/node.exe')), 'node for the fake npm CLI');
+    })->skip(PHP_OS_FAMILY !== 'Windows' || ! array_filter(explode(PATH_SEPARATOR, (string) getenv('PATH')), fn (string $path) => is_file(rtrim($path, '\\/').'/node.exe')), 'a Windows npm .cmd shim, with node for the fake npm CLI');
     it('runs the shipped Codex CLI choice with replay, native approvals and provider-exit errors', function () {
         $cwd = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-codex-cli-'.bin2hex(random_bytes(4));
         mkdir($cwd);
@@ -178,5 +179,5 @@ describe('the agent over stdio', function () {
         } finally {
             expect($client->close())->toBe(0);
         }
-    })->skip(! array_filter(explode(PATH_SEPARATOR, (string) getenv('PATH')), fn (string $path) => is_file(rtrim($path, '\\/').'/node.exe')), 'node for the fake npm CLI');
-})->skip(PHP_OS_FAMILY !== 'Windows', 'containment exists on Windows only so far');
+    })->skip(PHP_OS_FAMILY !== 'Windows' || ! array_filter(explode(PATH_SEPARATOR, (string) getenv('PATH')), fn (string $path) => is_file(rtrim($path, '\\/').'/node.exe')), 'a Windows npm .cmd shim, with node for the fake npm CLI');
+})->skip(! TreeProbe::containmentHere(), TreeProbe::skipReason());

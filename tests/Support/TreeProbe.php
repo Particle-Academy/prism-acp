@@ -14,6 +14,12 @@ final class TreeProbe
         return (PHP_OS_FAMILY === 'Linux' || PHP_OS_FAMILY === 'Darwin') && PosixTree::missing() === [];
     }
 
+    /** Whether a provider can be launched here at all: Windows, or POSIX with what it needs. */
+    public static function containmentHere(): bool
+    {
+        return PHP_OS_FAMILY === 'Windows' || self::supported();
+    }
+
     public static function skipReason(): string
     {
         if (PHP_OS_FAMILY !== 'Linux' && PHP_OS_FAMILY !== 'Darwin') {
