@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.2
+
+### Security
+
+- Codex: a JSON-RPC response that matches no pending request is no longer forwarded. The client receives only the fixed notice "Codex RPC response could not be correlated" (`rpc_response_gap`); the response body, id and error text are dropped (G-299).
+- Claude: `allowedTools` and `disallowedTools` are passed as separate argument values, and malformed rules (empty, a leading dash, control characters, invalid UTF-8, non-list arrays) are refused with `ClaudeToolRuleError` (`invalid_claude_tool_rule`) before any process starts (G-305).
+
+### Other
+
+- The PHP NDJSON framer no longer rescans pending lines.
+- The reference review now covers the TypeScript package through 0.42.0.
+
+No breaking changes for valid tool rules. A malformed rule that was previously sent now refuses.
+
 ## 0.1.1
 
 - Fixed: the package version constant reported `0.1.0-alpha.5` in the 0.1.0 tag. No other changes. Use this release rather than 0.1.0.
