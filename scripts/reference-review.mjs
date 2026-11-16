@@ -10,6 +10,10 @@ export const contracts = Object.freeze({
   claudeAppendSystemPromptFile: '0.35.0', claudePluginDirs: '0.35.0', agentVersion: '0.35.0',
   codexThreadConfig: '0.36.0', ndjsonIncrementalSearch: '0.36.1',
   claudeQueuedCancelAccounting: '0.37.0',
+  codexSteer: '0.38.0', rpcRequestDeadline: '0.38.0', codexUncorrelatedResponseRedaction: '0.38.0',
+  codexCommands: '0.39.0', codexToolNames: '0.39.0', fileEdits: '0.39.0',
+  stopVerdictObserver: '0.40.0', windowsShippedSupervisor: '0.41.0',
+  claudeToolRuleArgv: '0.41.2', claudeFoldedPromptSettlement: '0.42.0',
 });
 
 // Assigned gaps are reviewed alongside release provenance; any numbered placeholder is insufficient.
@@ -19,6 +23,9 @@ const contractGaps = Object.freeze({
   claudeSettingSources: 'G-233', claudeStrictMcpConfig: 'G-234', claudeAppendSystemPromptFile: 'G-235',
   claudePluginDirs: 'G-236', codexThreadConfig: 'G-237', ndjsonIncrementalSearch: 'G-232',
   claudeQueuedCancelAccounting: 'G-238',
+  codexSteer: 'G-297', rpcRequestDeadline: 'G-298', codexUncorrelatedResponseRedaction: 'G-299',
+  codexCommands: 'G-300', codexToolNames: 'G-301', fileEdits: 'G-302', stopVerdictObserver: 'G-303',
+  windowsShippedSupervisor: 'G-304', claudeToolRuleArgv: 'G-305', claudeFoldedPromptSettlement: 'G-306',
 });
 
 function core(version) {
