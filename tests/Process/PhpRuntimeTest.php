@@ -6,6 +6,7 @@ use Prism\Acp\Claude\PhpRuntime;
 use Prism\Acp\Env\ChildEnv;
 use Prism\Acp\Process\ProcessTreeException;
 use Prism\Acp\Process\WindowsProviderProcess;
+use Tests\Support\TreeProbe;
 
 /** @return array<string, mixed> */
 function measuredPhpSapi(string $binary, array $arguments, bool $explicit): array
@@ -39,6 +40,11 @@ it('refuses an unqualified or malformed hook runtime before any interpreter runs
     expect(fn () => PhpRuntime::resolve($path))->toThrow(ProcessTreeException::class, 'absolute existing PHP CLI');
 })->with(['php', '', "C:/php.exe\n", 'relative/php.exe', "C:/php\0.exe"]);
 
+it('POSIX: verifies the current CLI under containment with inherited ini disabled', function () {
+    expect(PhpRuntime::resolve(null))->toBe(realpath(PHP_BINARY))
+        ->and(fn () => PhpRuntime::resolve('/bin/sh'))->toThrow(ProcessTreeException::class, 'did not verify as a working PHP CLI');
+})->skip(PHP_OS_FAMILY === 'Windows' || ! TreeProbe::supported(), 'POSIX containment');
+
 describe('actual Windows hook runtime selection', function () {
     it('verifies the current CLI under containment with inherited ini disabled', function () {
         expect(PhpRuntime::resolve(null))->toBe(realpath(PHP_BINARY));
@@ -60,4 +66,4 @@ describe('actual Windows hook runtime selection', function () {
             expect(fn () => PhpRuntime::resolve(dirname(PHP_BINARY).DIRECTORY_SEPARATOR.$filename))->toThrow(ProcessTreeException::class, 'did not verify as a working PHP CLI');
         })->skip(! is_file(dirname(PHP_BINARY).DIRECTORY_SEPARATOR.$filename), "{$name} SAPI binary unavailable; UNCHECKED");
     }
-})->skip(PHP_OS_FAMILY !== 'Windows', 'actual runtime containment is Windows only in this preview');
+})->skip(PHP_OS_FAMILY !== 'Windows', 'measures the Windows CGI/debugger .exe SAPI binaries');

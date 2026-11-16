@@ -13,6 +13,7 @@ use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Meta;
 use Prism\Acp\Ndjson\Json;
 use Prism\Acp\Process\ProcessTreeException;
+use Tests\Support\TreeProbe;
 
 /*
  * THE CLAUDE DRIVER, AGAINST A PROCESS. tests/fixtures/fake-claude.php stands in for the CLI (it speaks the real
@@ -368,7 +369,7 @@ describe('ClaudeDriver against a process', function () {
             ->and($h->exited)->toBeTrue()
             ->and($pid)->toBeInt();
     });
-})->skip(PHP_OS_FAMILY !== 'Windows', 'containment exists on Windows only so far');
+})->skip(! TreeProbe::containmentHere(), TreeProbe::skipReason());
 
 describe('ClaudeDriver: permission prompts, end to end through the hook', function () {
     it('removes its actual permission directory before normal stop completes', function (): void {
@@ -454,7 +455,8 @@ describe('ClaudeDriver: permission prompts, end to end through the hook', functi
         $reflection = new ReflectionProperty(ClaudeDriver::class, 'approvals');
         $server = $reflection->getValue($h->driver);
         $listen = new ReflectionProperty($server, 'server');
-        $address = 'tcp://'.stream_socket_get_name($listen->getValue($server), false);
+        // Loopback TCP on Windows, the private unix socket elsewhere: the real channel either way, so only the token is wrong.
+        $address = (PHP_OS_FAMILY === 'Windows' ? 'tcp://' : 'unix://').stream_socket_get_name($listen->getValue($server), false);
         $process = proc_open($command, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, null,
             [...$env, 'PRISM_ACP_APPROVAL_SOCKET' => $address, 'PRISM_ACP_APPROVAL_TOKEN' => str_repeat('0', 64)]);
         fwrite($pipes[0], '{"tool_name":"Bash"}');
@@ -462,8 +464,9 @@ describe('ClaudeDriver: permission prompts, end to end through the hook', functi
         // The driver answers on the loop: run it until the hook has its answer.
         $code = null;
         $h->until(function () use ($process, &$code) {
-            $status = proc_get_status($process);
-            if (! $status['running']) {
+            // Before PHP 8.3, only the first status after the exit carries its code; later calls report -1.
+            $status = $code === null ? proc_get_status($process) : null;
+            if ($status !== null && ! $status['running']) {
                 $code = $status['exitcode'];
             }
 
@@ -479,4 +482,4 @@ describe('ClaudeDriver: permission prompts, end to end through the hook', functi
             ->and($h->permissionRequests)->toBe([]);
         $h->finish();
     });
-})->skip(PHP_OS_FAMILY !== 'Windows', 'containment exists on Windows only so far');
+})->skip(! TreeProbe::containmentHere(), TreeProbe::skipReason());
