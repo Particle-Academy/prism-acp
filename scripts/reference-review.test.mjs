@@ -90,11 +90,11 @@ test('each 0.38.0..0.42.0 gap is pinned to its first release', () => {
   }
 });
 
-test('a placeholder gap must be the exact reviewed placeholder, not any G-TBD name', () => {
+test('each 0.38.0..0.42.0 gap carries its own assigned number, never a placeholder or a neighbour', () => {
   const replace = gap => ({...review, knownMissing: review.knownMissing.map(entry => entry.contract === 'codexUncorrelatedResponseRedaction' ? {...entry, gap} : entry)});
-  assert.throws(() => reviewReference(metadata, replace('G-TBD-something-else'), observed), /Wrong gap citation/);
-  assert.throws(() => reviewReference(metadata, replace('G-TBD-'), observed), /Missing gap citation/);
-  assert.throws(() => reviewReference(metadata, replace('G-TBD-Codex Redaction'), observed), /Missing gap citation/);
+  assert.throws(() => reviewReference(metadata, replace('G-TBD-codex-uncorrelated-redaction'), observed), /Missing gap citation/);
+  assert.throws(() => reviewReference(metadata, replace('G-298'), observed), /Wrong gap citation/);
+  assert.throws(() => reviewReference(metadata, replace('G-141'), observed), /Wrong gap citation/);
 });
 
 test('the security hardening gaps cannot be marked present while still listed', () => {

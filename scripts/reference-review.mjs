@@ -23,12 +23,9 @@ const contractGaps = Object.freeze({
   claudeSettingSources: 'G-233', claudeStrictMcpConfig: 'G-234', claudeAppendSystemPromptFile: 'G-235',
   claudePluginDirs: 'G-236', codexThreadConfig: 'G-237', ndjsonIncrementalSearch: 'G-232',
   claudeQueuedCancelAccounting: 'G-238',
-  // Reviewed through 0.42.0. G-TBD ids are named placeholders, pinned here exactly, until the register numbers them.
-  codexSteer: 'G-TBD-codex-steer', rpcRequestDeadline: 'G-TBD-rpc-request-deadline',
-  codexUncorrelatedResponseRedaction: 'G-TBD-codex-uncorrelated-redaction', codexCommands: 'G-TBD-codex-commands',
-  codexToolNames: 'G-TBD-codex-tool-names', fileEdits: 'G-TBD-file-edits',
-  stopVerdictObserver: 'G-TBD-stop-verdict-observer', windowsShippedSupervisor: 'G-TBD-shipped-supervisor',
-  claudeToolRuleArgv: 'G-TBD-claude-tool-rule-argv', claudeFoldedPromptSettlement: 'G-TBD-claude-fold-settlement',
+  codexSteer: 'G-297', rpcRequestDeadline: 'G-298', codexUncorrelatedResponseRedaction: 'G-299',
+  codexCommands: 'G-300', codexToolNames: 'G-301', fileEdits: 'G-302', stopVerdictObserver: 'G-303',
+  windowsShippedSupervisor: 'G-304', claudeToolRuleArgv: 'G-305', claudeFoldedPromptSettlement: 'G-306',
 });
 
 function core(version) {
@@ -54,7 +51,7 @@ export function reviewReference(metadata, review, observed) {
     assert(Object.hasOwn(contracts, entry.contract), `Unknown missing contract: ${entry.contract}`);
     assert(!missing.has(entry.contract), `Duplicate missing contract: ${entry.contract}`);
     assert.equal(entry.since, contracts[entry.contract], `Wrong reference release for ${entry.contract}`);
-    assert.match(entry.gap, /^(?:G-[1-9][0-9]*(?: \(G-140\))?|G-TBD-[a-z0-9]+(?:-[a-z0-9]+)*)$/,`Missing gap citation for ${entry.contract}`);
+    assert.match(entry.gap, /^G-[1-9][0-9]*(?: \(G-140\))?$/, `Missing gap citation for ${entry.contract}`);
     assert(Object.hasOwn(contractGaps, entry.contract), `No reviewed gap assignment for ${entry.contract}`);
     assert.equal(entry.gap, contractGaps[entry.contract], `Wrong gap citation for ${entry.contract}`);
     missing.set(entry.contract, entry);

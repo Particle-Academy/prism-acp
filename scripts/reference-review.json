@@ -15,15 +15,15 @@
     {"contract": "claudePluginDirs", "since": "0.35.0", "gap": "G-236"},
     {"contract": "codexThreadConfig", "since": "0.36.0", "gap": "G-237"},
     {"contract": "claudeQueuedCancelAccounting", "since": "0.37.0", "gap": "G-238"},
-    {"contract": "codexSteer", "since": "0.38.0", "gap": "G-TBD-codex-steer"},
-    {"contract": "rpcRequestDeadline", "since": "0.38.0", "gap": "G-TBD-rpc-request-deadline"},
-    {"contract": "codexUncorrelatedResponseRedaction", "since": "0.38.0", "gap": "G-TBD-codex-uncorrelated-redaction"},
-    {"contract": "codexCommands", "since": "0.39.0", "gap": "G-TBD-codex-commands"},
-    {"contract": "codexToolNames", "since": "0.39.0", "gap": "G-TBD-codex-tool-names"},
-    {"contract": "fileEdits", "since": "0.39.0", "gap": "G-TBD-file-edits"},
-    {"contract": "stopVerdictObserver", "since": "0.40.0", "gap": "G-TBD-stop-verdict-observer"},
-    {"contract": "windowsShippedSupervisor", "since": "0.41.0", "gap": "G-TBD-shipped-supervisor"},
-    {"contract": "claudeToolRuleArgv", "since": "0.41.2", "gap": "G-TBD-claude-tool-rule-argv"},
-    {"contract": "claudeFoldedPromptSettlement", "since": "0.42.0", "gap": "G-TBD-claude-fold-settlement"}
+    {"contract": "codexSteer", "since": "0.38.0", "gap": "G-297"},
+    {"contract": "rpcRequestDeadline", "since": "0.38.0", "gap": "G-298"},
+    {"contract": "codexUncorrelatedResponseRedaction", "since": "0.38.0", "gap": "G-299"},
+    {"contract": "codexCommands", "since": "0.39.0", "gap": "G-300"},
+    {"contract": "codexToolNames", "since": "0.39.0", "gap": "G-301"},
+    {"contract": "fileEdits", "since": "0.39.0", "gap": "G-302"},
+    {"contract": "stopVerdictObserver", "since": "0.40.0", "gap": "G-303"},
+    {"contract": "windowsShippedSupervisor", "since": "0.41.0", "gap": "G-304"},
+    {"contract": "claudeToolRuleArgv", "since": "0.41.2", "gap": "G-305"},
+    {"contract": "claudeFoldedPromptSettlement", "since": "0.42.0", "gap": "G-306"}
   ]
 }

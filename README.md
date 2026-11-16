@@ -192,10 +192,10 @@ through 0.42.0 have been reviewed. Missing contracts tracked by G-141 are 0.26 r
 and 0.33 Claude app-MCP-only native-tool restriction.
 Additional gaps are Claude setting sources (G-233), strict MCP config (G-234), prompt-file append (G-235), plugin paths
 (G-236), Codex thread config (G-237), and queued cancellation accounting/refusal
-(G-238). Releases 0.38.0 to 0.42.0 add ten more, still to be numbered: Codex steering, per-request RPC deadlines, not
-echoing an uncorrelated Codex RPC response, Codex compact/review commands, Codex tool names, FileEdit metadata, stop
-verdict observers, the shipped digest-pinned Windows supervisor, per-value Claude tool-rule argv with refusal, and
-settlement of prompts Claude folds into a running turn. Default agent version reporting and caller overrides are
+(G-238). Releases 0.38.0 to 0.42.0 add ten more: Codex steering (G-297), per-request RPC deadlines (G-298), uncorrelated
+Codex RPC response handling (G-299), Codex compact/review commands (G-300), Codex tool names (G-301), FileEdit metadata
+(G-302), stop verdict observers (G-303), the shipped Windows supervisor (G-304), Claude tool-rule argv (G-305), and
+settlement of prompts Claude folds into a running turn (G-306). Default agent version reporting and caller overrides are
 already present. The framing fix (G-232) is also present, as confirmed by the bounded native search probe. See the
 [release-by-release review](docs/reference-review-0.42.0.md) and its [0.37.0 predecessor](docs/reference-review-0.37.0.md).
 The currency watchdog executes PHP API/cache-reader, initialize, bounded framing-search, uncorrelated-response and
