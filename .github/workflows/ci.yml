@@ -122,6 +122,14 @@ jobs:
           php vendor/bin/pest tests/Process/PosixProcessTreeTest.php tests/Process/PosixTreeTest.php tests/Unit/PosixPrivateDirectoryTest.php tests/Process/ApprovalGuardTest.php --display-skipped > posix-containment.log 2>&1 || code=$?
           cat posix-containment.log
           exit $code
+      - name: Linux cgroup v2 containment, inside a cgroup delegated to this user
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          code=0
+          bash tools/ci/delegated-cgroup.sh bash -c 'php scripts/check-posix-containment.php cgroup && php vendor/bin/pest tests/Process/PosixCgroupTest.php tests/Process/PosixProcessTreeTest.php tests/Process/ClaudeDriverTest.php tests/Process/CodexDriverTest.php tests/Process/ApprovalGuardTest.php tests/Process/StdioTest.php --display-skipped' > cgroup-containment.log 2>&1 || code=$?
+          cat cgroup-containment.log
+          exit $code
       - name: Consumer installation without development dependencies
         shell: bash
         run: |
