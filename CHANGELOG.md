@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+- Added: Linux and macOS support (G-296). `Provider::launch` now contains providers on Linux and macOS with a
+  separate PHP CLI supervisor, ported from the TypeScript reference. The CLI leads its own process group. On Linux,
+  descendants that leave the group are also found through `/proc`, by parent chain and by a per-launch
+  `PRISM_ACP_TREE_ID` cookie. A pid is signalled only while its start time still matches. The tree ends on stop, on
+  kill, when the CLI exits, and when the host dies, including by `SIGKILL`. Linux needs `ext-pcntl`, `ext-posix` and a
+  readable `/proc`; macOS needs the two extensions. Both are `suggest`ed, not required. Without them a launch refuses
+  with `ContainmentUnavailable`, naming what is missing, before anything starts.
+- **macOS containment is weaker, and labelled so:** it holds the process group only, so a descendant that leaves the
+  group escapes a stop. Linux keeps the reference's known hole (G-92): a descendant that clears its environment, leaves
+  the group and is orphaned is not found. `Provider::containment()` and `ProcessTree::$weakness` state both in words.
+- The provider inherits none of the host's descriptors beyond stdio.
+- Claude permission prompts work on Linux and macOS through the reference's `/bin/sh` exec-form guard, over a Unix
+  socket in a private directory. Private directories use `posix_geteuid()` when `ext-posix` is loaded.
+- Windows behaviour is unchanged.
+
 ## 0.1.1
 
 - Fixed: the package version constant reported `0.1.0-alpha.5` in the 0.1.0 tag. No other changes. Use this release rather than 0.1.0.
