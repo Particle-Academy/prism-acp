@@ -177,21 +177,22 @@ final class PosixTree
         }
     }
 
-    /** Freeze, collect until nothing new appears, then kill: a frozen process cannot start another. */
+    /**
+     * Freeze, collect until nothing new appears, then kill: a frozen process cannot start another. Needs ext-pcntl's
+     * signal numbers, which differ by platform (SIGSTOP is 19 on Linux and 17 on macOS); missing() requires it.
+     */
     public function terminate(): void
     {
-        $stop = \defined('SIGSTOP') ? SIGSTOP : 19;
-        $kill = \defined('SIGKILL') ? SIGKILL : 9;
         for ($round = 0; $round < 5; $round++) {
             $before = count($this->known);
             $procs = $this->scan();
             $this->track($procs);
-            $this->signalAll($procs, $stop);
+            $this->signalAll($procs, SIGSTOP);
             if ($round > 0 && count($this->known) === $before) {
                 break;
             }
         }
-        $this->signalAll($this->scan(), $kill);
+        $this->signalAll($this->scan(), SIGKILL);
     }
 
     /** Processes of the tree still running: the group (as one) and every recorded pid outside it. Zombies run nothing. */
@@ -224,7 +225,8 @@ final class PosixTree
             return true;
         }
 
-        return posix_get_last_error() === (\defined('PCNTL_EPERM') ? PCNTL_EPERM : 1);
+        // EPERM (1 on Linux and macOS): a member exists, it is just not ours to signal.
+        return posix_get_last_error() === 1;
     }
 
     /** @param array<int, array{ppid: int, pgrp: int, start: string, zombie: bool}> $procs */
