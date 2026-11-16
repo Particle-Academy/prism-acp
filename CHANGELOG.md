@@ -9,9 +9,17 @@
   kill, when the CLI exits, and when the host dies, including by `SIGKILL`. Linux needs `ext-pcntl`, `ext-posix` and a
   readable `/proc`; macOS needs the two extensions. Both are `suggest`ed, not required. Without them a launch refuses
   with `ContainmentUnavailable`, naming what is missing, before anything starts.
+- **Linux cgroup mode.** When the host's own cgroup v2 is delegated to its user (for example a systemd service or
+  scope with `Delegate=yes`), the provider moves itself into a fresh `prism-acp-<hex>` cgroup before it runs. The tree
+  is ended with `cgroup.kill`, or by freezing and killing each member where the kernel lacks it. This holds the G-92
+  case, and **no process's environment is read**. A same-user descendant that deliberately migrates itself within the
+  delegation, leaves the group and is orphaned still escapes, and the weakness text says so. Empty provider cgroups
+  left by a crashed supervisor are swept on the next launch.
+- **Linux fallback (`process-group+proc`)**, used when no delegated cgroup exists: the reference's design, keeping its
+  known hole (G-92). Only this mode reads same-user environments, for the marker's presence, bounded to 4 MiB each.
 - **macOS containment is weaker, and labelled so:** it holds the process group only, so a descendant that leaves the
-  group escapes a stop. Linux keeps the reference's known hole (G-92): a descendant that clears its environment, leaves
-  the group and is orphaned is not found. `Provider::containment()` and `ProcessTree::$weakness` state both in words.
+  group escapes a stop. `Provider::containment()`, `ProcessTree::$containment` and `ProcessTree::$weakness` state the
+  mode and its limits in words.
 - The provider inherits none of the host's descriptors beyond stdio.
 - Claude permission prompts work on Linux and macOS through the reference's `/bin/sh` exec-form guard, over a Unix
   socket in a private directory. Private directories use `posix_geteuid()` when `ext-posix` is loaded.

@@ -191,26 +191,46 @@ a hard kill included. What a stop can still miss depends on the platform:
 | platform | containment | what it holds | what it does NOT hold |
 |---|---|---|---|
 | Windows | Job Object (`job-object`) | every descendant: the provider is assigned to the job, with kill-on-close and no breakaway, before its first instruction | nothing in the tree can leave the job |
-| Linux | process group plus `/proc` (`process-group`) | the provider's group, plus every descendant found by parent chain or by a per-launch `PRISM_ACP_TREE_ID` cookie in its environment, including a child that called `setsid` and was then orphaned | **G-92:** a descendant that clears its environment, leaves the group and is orphaned before the stop. Only a cgroup would hold it. |
+| Linux, `cgroup` mode | the provider's own cgroup v2 (`cgroup`) | every descendant: the provider moves itself into a fresh cgroup before it runs, so everything it starts is born there, whatever it does with `setsid`, its environment or its parent; plus the process group and parent chain. **No environment is read.** | a same-user descendant that deliberately writes its own pid into another cgroup of this user's delegation, **and** leaves the group, **and** is orphaned. The kernel allows a delegated user to move its own processes within the delegation. Root or `CAP_SYS_ADMIN` can move anything. |
+| Linux, `process-group+proc` fallback | process group plus `/proc` (`process-group`) | the provider's group, plus every descendant found by parent chain or by a per-launch `PRISM_ACP_TREE_ID` marker in its environment, including a child that called `setsid` and was then orphaned | **G-92:** a descendant that clears its environment, leaves the group and is orphaned before the stop. **Reads** the environment of this user's processes, to check for the marker. |
 | macOS | process group only (`process-group`) | the provider's group | **weaker:** any descendant that leaves the group (`setsid`, `setpgid`) escapes, and the verdict cannot see it |
 | anything else | none | | refused with `ContainmentUnavailable` before anything starts |
 
-`Provider::containment()` reports the kind and the weakness for this platform before a launch, and throws
-`ContainmentUnavailable` naming what is missing. `ProcessTree::$weakness` carries the same text after a launch.
+`Provider::containment()` reports the kind, the mode and the weakness before a launch. On the Linux fallback it also
+reports why cgroup mode was unavailable. It throws `ContainmentUnavailable` naming what is missing.
+`ProcessTree::$containment` and `ProcessTree::$weakness` report the mode a launch actually got.
+
+**How a Linux host gets `cgroup` mode.** The host process's own cgroup must be cgroup v2, delegated to the user it
+runs as, and have no controllers enabled for its children (`cgroup.subtree_control` empty). The package finds it from
+`/proc/self/cgroup` and the cgroup2 mount, and creates `prism-acp-<16 hex>` cgroups under it. It never uses `sudo`,
+root or `systemd` itself, and cgroup mode needs neither `cgroup.kill` (kernel 5.14+) nor controllers. Without
+`cgroup.kill` it freezes the cgroup and kills each member until the cgroup is empty. With systemd, any of these gives
+the host such a cgroup:
+
+- a systemd user service with `Delegate=yes`;
+- a system service with `User=` and `Delegate=yes`;
+- `systemd-run --user --scope -p Delegate=yes php your-host.php`.
+
+A queue worker or PHP CLI started from a login shell is usually not delegated, and gets the fallback. Provider
+cgroups left behind by a crashed supervisor are removed on the next launch, but only empty ones with exactly that
+name.
+
+**What the fallback reads.** Only in `process-group+proc` mode does the supervisor read `/proc/<pid>/environ`, for
+this user's processes, at most 4 MiB each. It checks only whether the launch's marker is present. Nothing read is
+kept, logged or returned. cgroup mode reads no process's environment.
 
 On Windows the stdin relay enters the job as well. Losing the host's control connection terminates the job, even when
 the relay is blocked reading stdin. On Linux and macOS the supervisor is a separate PHP CLI process outside the
-provider's group. It ends the tree when its private Unix control socket closes, which the kernel does when the host
-dies, even by `SIGKILL`. A pid is signalled only while its start time still matches, so a reused pid is never touched
-(start times come from `/proc`, so this applies on Linux). To find the cookie, the supervisor reads the environment of
-this user's processes. It only tests for the cookie, and nothing read is kept, logged or returned. Every descriptor the
-host holds beyond stdio is replaced with `/dev/null` for the supervisor. The provider therefore inherits none of the
-host's files, sockets or listeners.
+provider's group and cgroup. It ends the tree when its private Unix control socket closes, which the kernel does when
+the host dies, even by `SIGKILL`. A pid found through `/proc` is signalled only while its start time still matches, so
+a reused pid is never touched (start times come from `/proc`, so this applies on Linux). In cgroup mode, only
+processes listed in the provider's own cgroup are killed. Every descriptor the host holds beyond stdio is replaced
+with `/dev/null` for the supervisor. The provider therefore inherits none of the host's files, sockets or listeners.
 
 A stop returns `{graceful, empty, survivors, verified}`. `verified: false` means no supervisor observation was
 obtained, and must not be reported as proven cleanup. On Windows the kernel still ends the job, so `empty` is true. On
-Linux and macOS nothing ends a process group for you, so it is false. On Linux `empty` covers the group and every
-descendant found; on macOS it covers the group only.
+Linux and macOS nothing ends a process group for you, so it is false. On Linux `empty` covers what the mode holds: the
+cgroup, group and parent chain, or the group, parent chain and marker. On macOS it covers the group only.
 
 Commands use argument arrays and never a shell. Relative binary paths and arbitrary batch files are refused.
 Recognized npm shims resolve to Node plus their script on Windows. On Linux and macOS a bare name is looked up on the
@@ -243,7 +263,16 @@ stays open. Ubuntu (PHP 8.2, 8.4, 8.5) and macOS (PHP 8.4) CI run the same fake-
 containment, plus real process trees whose grandchild calls `setsid`. On Linux they cover the orphaned `setsid`
 descendant ended through its cookie, the pid-reuse guard, a host `SIGKILL`, no inherited host descriptors, and
 missing `ext-pcntl`/`ext-posix` refusing before spawn. The G-92 hole and macOS's group-only limit are asserted as they
-are, not skipped. No CI job signs in to a provider or runs a live model turn. A prior local Windows Claude session and
+are, not skipped. Ubuntu then reruns the cgroup, tree and driver suites inside a cgroup v2 delegated to the job's user,
+using `tools/ci/delegated-cgroup.sh`. The run fails unless cgroup mode is actually active. Those tests cover:
+
+- the env-cleared, `setsid`, orphaned descendant ended (through `cgroup.kill`, and again through freeze-and-kill);
+- a host `SIGKILL`;
+- an observed supervisor proving that no environment is read, even when every read would throw;
+- the stale-cgroup sweep leaving populated, nested and foreign-named cgroups alone;
+- the residual escape by deliberate cgroup migration, asserted as it is.
+
+No CI job signs in to a provider or runs a live model turn. A prior local Windows Claude session and
 resume were dogfooded in Prism Labs. No live Claude or Codex CLI has been run on Linux or macOS under this package.
 
 From a source checkout, the optional `node tools/native/codex-mcp.mjs PHP_EXE CODEX_EXE [INSTALLED_AUTOLOAD]`
