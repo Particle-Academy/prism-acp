@@ -17,7 +17,8 @@ namespace Prism\Acp\Process;
  * its start time still matches: a pid that was reused since belongs to someone else, and is never touched.
  *
  * NOT caught (G-92): a descendant that clears its environment AND leaves the group AND is orphaned before it is seen.
- * Only a cgroup would hold that.
+ * Only a cgroup holds that, which is why cgroup mode (PosixCgroup) is used whenever one is delegated. There this tree
+ * still runs, for the group and parent chain, but with environment reads OFF.
  *
  * This file is loaded by resources/posix/supervisor.php with a plain require, so it depends on nothing else here.
  */
@@ -28,8 +29,19 @@ final class PosixTree
     /** @var array<int, string> pid => start time of every process seen in the tree */
     private array $known = [];
 
+    /** The most of one process's environment a cookie check reads. Past it, the cookie is simply not seen. */
+    public const MAX_ENVIRON_BYTES = 4 * 1024 * 1024;
+
     private readonly string $needle;
 
+    /** @var (\Closure(string): ?string)|null */
+    private readonly ?\Closure $environ;
+
+    /**
+     * @param  bool|\Closure(string): ?string  $environ  how /proc/<pid>/environ is read for the cookie: true for the
+     *                                                   bounded default, a closure for a test's own, FALSE to never read
+     *                                                   any environment (cgroup mode, where the cgroup holds the tree)
+     */
     public function __construct(
         /** The provider's pid, which is its process group's id. */
         public readonly int $pgid,
@@ -37,8 +49,29 @@ final class PosixTree
         /** This process, never part of the tree. */
         private readonly int $self = 0,
         private readonly string $proc = '/proc',
+        bool|\Closure $environ = true,
     ) {
         $this->needle = self::COOKIE_ENV.'='.$cookie."\0";
+        $this->environ = $environ === true ? self::readEnviron(...) : ($environ === false ? null : $environ);
+    }
+
+    /** Whether this tree reads environments at all. */
+    public function readsEnvironments(): bool
+    {
+        return $this->environ !== null;
+    }
+
+    /** The default cookie read: at most MAX_ENVIRON_BYTES, and null when the file cannot be read. */
+    public static function readEnviron(string $path): ?string
+    {
+        set_error_handler(static fn (): bool => true);
+        try {
+            $content = file_get_contents($path, false, null, 0, self::MAX_ENVIRON_BYTES);
+        } finally {
+            restore_error_handler();
+        }
+
+        return is_string($content) ? $content : null;
     }
 
     /**
@@ -195,13 +228,18 @@ final class PosixTree
         $this->signalAll($this->scan(), SIGKILL);
     }
 
-    /** Processes of the tree still running: the group (as one) and every recorded pid outside it. Zombies run nothing. */
-    public function left(): int
+    /**
+     * Processes of the tree still running: the group (as one) and every recorded pid outside it. Zombies run nothing.
+     *
+     * @param  list<int>  $counted  pids already counted elsewhere (a cgroup's members), left out here
+     */
+    public function left(array $counted = []): int
     {
         $procs = $this->scan();
-        $n = $this->groupAlive($procs) ? 1 : 0;
+        $skip = array_fill_keys($counted, true);
+        $n = $this->groupAlive(array_diff_key($procs, $skip)) ? 1 : 0;
         foreach (array_keys($this->known) as $pid) {
-            if ($pid !== $this->pgid && $this->same($procs, $pid) && $procs[$pid]['pgrp'] !== $this->pgid && ! $procs[$pid]['zombie']) {
+            if (! isset($skip[$pid]) && $pid !== $this->pgid && $this->same($procs, $pid) && $procs[$pid]['pgrp'] !== $this->pgid && ! $procs[$pid]['zombie']) {
                 $n++;
             }
         }
@@ -238,8 +276,11 @@ final class PosixTree
     /** The tree's cookie, which every descendant inherits unless it clears its environment. */
     private function carriesCookie(int $pid): bool
     {
-        // Compared and discarded: the environment is never kept, logged or returned.
-        $environ = self::read($this->proc.'/'.$pid.'/environ');
+        if ($this->environ === null) {
+            return false;
+        }
+        // A presence check, compared and discarded: the environment is never kept, logged or returned.
+        $environ = ($this->environ)($this->proc.'/'.$pid.'/environ');
         if (! is_string($environ)) {
             return false;
         }

@@ -15,10 +15,12 @@ use Prism\Acp\Support\PrivateDirectory;
  * control socket closes); and when the host process dies, even by SIGKILL, because the kernel closes a dead process's
  * sockets and the supervisor reads that as a kill.
  *
- * What it holds differs by platform, and Provider::containment() says which:
- *  - Linux: the process group, plus every descendant found through /proc by parent chain or by the per-launch
- *    PRISM_ACP_TREE_ID cookie in its environment, so a child that called setsid is still ended. NOT held (G-92): a
- *    descendant that clears its environment, leaves the group and is orphaned before the stop.
+ * What it holds differs by platform and mode, and Provider::containment() / ProcessTree::$weakness say which:
+ *  - Linux, cgroup mode (when this user has a delegated cgroup v2, see PosixCgroup): the provider's own cgroup, which
+ *    every descendant is born in, plus the process group and parent chain. No environment is read.
+ *  - Linux, process-group+proc (the fallback): the process group, plus every descendant found through /proc by parent
+ *    chain or by the per-launch PRISM_ACP_TREE_ID cookie in its environment, so a child that called setsid is still
+ *    ended. NOT held (G-92): a descendant that clears its environment, leaves the group and is orphaned.
  *  - macOS: the process group ONLY. A descendant that leaves the group (setsid, setpgid) escapes the stop.
  *
  * The provider's stdio are pipes this process selects on directly. The control channel is a Unix socket in a fresh
@@ -40,6 +42,11 @@ final class PosixProviderProcess implements ProviderProcess
     private const MAX_SOCKET_PATH = 100;
 
     private static ?string $supervisorPhp = null;
+
+    /** '1': a delegated cgroup v2 when there is one (Linux). '0': never. 'freeze': no cgroup.kill. */
+    private static string $cgroups = '1';
+
+    private static ?string $supervisorScript = null;
 
     private string $controlBuffer = '';
 
@@ -88,6 +95,30 @@ final class PosixProviderProcess implements ProviderProcess
             throw new ProcessTreeException('the supervisor PHP CLI must be an absolute existing path');
         }
         self::$supervisorPhp = $phpCli;
+    }
+
+    /**
+     * @internal Tests only: force the process-group fallback (false), or a cgroup without cgroup.kill ('freeze'), on a
+     * host that has a delegated cgroup. Production never needs either; cgroup mode is chosen whenever it is available.
+     */
+    public static function useCgroups(bool|string $cgroups): void
+    {
+        self::$cgroups = $cgroups === true ? '1' : ($cgroups === 'freeze' ? 'freeze' : '0');
+    }
+
+    /** Whether launches will try a delegated cgroup at all (see useCgroups). */
+    public static function cgroupsEnabled(): bool
+    {
+        return self::$cgroups !== '0';
+    }
+
+    /**
+     * @internal Tests only: run a wrapper around the supervisor (one that observes how it reads environments). Null for
+     * the shipped script.
+     */
+    public static function useSupervisorScript(?string $path): void
+    {
+        self::$supervisorScript = $path;
     }
 
     /**
@@ -156,9 +187,9 @@ final class PosixProviderProcess implements ProviderProcess
             '-d', 'auto_prepend_file=', '-d', 'auto_append_file=',
             // Required, not run as the main script: the CLI keeps its main script open, and the provider would
             // inherit that descriptor. A required file is closed once compiled.
-            '-r', 'require $argv[1];', dirname(__DIR__, 2).'/resources/posix/supervisor.php'],
+            '-r', 'require $argv[1];', self::$supervisorScript ?? dirname(__DIR__, 2).'/resources/posix/supervisor.php'],
             $descriptors, $pipes, $directory,
-            [...$env, 'PRISM_ACP_TREE_CHANNEL' => $path, 'PRISM_ACP_TREE_TOKEN' => $token]);
+            [...$env, 'PRISM_ACP_TREE_CHANNEL' => $path, 'PRISM_ACP_TREE_TOKEN' => $token, 'PRISM_ACP_TREE_CGROUP' => self::$cgroups]);
         fclose($null);
         if (! is_resource($supervisor)) {
             fclose($server);
@@ -176,7 +207,7 @@ final class PosixProviderProcess implements ProviderProcess
             $removeChannel();
             self::send($control, implode(' ', ['spawn', base64_encode($application), base64_encode($directory), ...array_map(base64_encode(...), $args)])."\n");
             $status = self::readLine($control, min($deadline, microtime(true) + self::LINE_SECONDS), self::MAX_CONTROL_LINE);
-            if ($status === null || preg_match('/^started (\d+)$/', $status, $started) !== 1) {
+            if ($status === null || preg_match('/^started (\d+) (cgroup|process-group)$/', $status, $started) !== 1) {
                 $code = $status !== null && preg_match('/^failed ([\w-]{1,40})$/', $status, $failed) === 1 ? $failed[1] : 'no report';
                 if (str_starts_with($code, 'missing-')) {
                     throw new ContainmentUnavailable('cannot contain the provider: the supervisor PHP CLI lacks '.substr($code, 8));
@@ -206,7 +237,7 @@ final class PosixProviderProcess implements ProviderProcess
         $pid = (int) $started[1];
 
         return new self($supervisor, $control, $pipes[0], $pipes[1], $pipes[2],
-            new ProcessTree($pid, (int) $status['pid'], 'process-group', $pid, Provider::weakness()));
+            new ProcessTree($pid, (int) $status['pid'], $started[2], $pid, Provider::weakness($started[2])));
     }
 
     public function tree(): ProcessTree
