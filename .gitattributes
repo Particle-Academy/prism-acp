@@ -9,3 +9,4 @@
 /tools export-ignore
 /.github export-ignore
 /rector.php export-ignore
+/composer-require-checker.json export-ignore
