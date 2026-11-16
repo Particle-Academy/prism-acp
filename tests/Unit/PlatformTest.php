@@ -26,6 +26,6 @@ it('says what each platform\'s containment does not hold', function () {
         ->and(Provider::MACOS_WEAKNESS)->toContain('escapes')
         ->and(Provider::LINUX_WEAKNESS)->toContain('G-92');
     if (PHP_OS_FAMILY === 'Windows') {
-        expect(Provider::containment())->toBe(['kind' => 'job-object', 'weakness' => null]);
+        expect(Provider::containment())->toBe(['kind' => 'job-object', 'mode' => 'job-object', 'weakness' => null]);
     }
 });
