@@ -25,6 +25,11 @@ use Tests\Support\TreeProbe;
  * it is would fail here too.
  */
 
+// These are the process-group(+proc) tests, so cgroup mode is forced off even where a delegated cgroup exists: the
+// fallback must keep behaving exactly as it did. PosixCgroupTest covers cgroup mode.
+beforeEach(fn () => PosixProviderProcess::useCgroups(false));
+afterEach(fn () => PosixProviderProcess::useCgroups(true));
+
 /** @param array<string, string> $extra */
 function launchPosixTree(string $dir, array $extra = []): ProviderProcess
 {
@@ -188,6 +193,7 @@ describe('POSIX: the host dying ends the tree', function () {
         file_put_contents($host, <<<PHP
             <?php
             require '{$autoload}';
+            Prism\Acp\Process\PosixProviderProcess::useCgroups(false);
             \$extra = {$extra};
             \$env = Prism\Acp\Env\ChildEnv::build(getenv(), allow: array_keys(\$extra), set: \$extra)->env;
             \$p = Prism\Acp\Process\Provider::launch(PHP_BINARY, ['{$fixture}', '{$dir}/pids'], '{$dir}', \$env);

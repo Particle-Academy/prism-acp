@@ -13,6 +13,7 @@ use Prism\Acp\Codex\CodexTransportHandlers;
 use Prism\Acp\Codex\CodexTransportOptions;
 use Prism\Acp\Codex\StdioCodexTransport;
 use Prism\Acp\Credentials\ProviderCredentials;
+use Prism\Acp\Process\Provider;
 use Prism\Acp\Process\StopVerdict;
 use Tests\Support\TreeProbe;
 
@@ -167,7 +168,7 @@ describe('CodexDriver against a contained process', function () {
             expect($h->cli()[0]['argv'])->toBe(['app-server', '--listen', 'stdio://'])
                 ->and($h->cli()[0]['env'])->not->toContain('OPENAI_API_KEY')
                 ->and($h->driver->withheldCredentials())->toContain('OPENAI_API_KEY')
-                ->and($h->driver->processTree()?->containment)->toBe(PHP_OS_FAMILY === 'Windows' ? 'job-object' : 'process-group')
+                ->and($h->driver->processTree()?->containment)->toBe(Provider::containment()['kind'])
                 ->and($h->said())->toBe('echo: hello π😀')
                 ->and(array_column($models['availableModels'], 'modelId'))->toBe(['fixture-model', 'second'])
                 ->and($h->requests('thread/start')[0]['params'])->toMatchArray(['approvalPolicy' => 'on-request', 'sandbox' => 'read-only', 'model' => 'fixture-model']);
