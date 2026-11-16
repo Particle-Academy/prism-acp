@@ -80,10 +80,12 @@ try {
             $uid = trim($uid);
             $prefix = $uid === '0' ? [] : ['/usr/bin/sudo', '-n', '--'];
             $other = $uid === '65534' ? '65533' : '65534';
-            [$changed] = ownerFixtureCommand([...$prefix, '/usr/bin/chown', $other, $node]);
+            // Linux keeps chown in /usr/bin, macOS in /usr/sbin.
+            $chown = is_executable('/usr/bin/chown') ? '/usr/bin/chown' : '/usr/sbin/chown';
+            [$changed] = ownerFixtureCommand([...$prefix, $chown, $other, $node]);
             clearstatcache(true, $node);
             $available = $changed === 0 && fileowner($node) === (int) $other;
-            $restore = fn (): array => ownerFixtureCommand([...$prefix, '/usr/bin/chown', $uid, $node]);
+            $restore = fn (): array => ownerFixtureCommand([...$prefix, $chown, $uid, $node]);
         }
     }
     if ($available) {
