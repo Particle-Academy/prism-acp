@@ -13,12 +13,12 @@ const observed = {
   claudeStrictMcpConfig: false, claudeAppendSystemPromptFile: false, claudePluginDirs: false,
   agentVersion: true, codexThreadConfig: false, ndjsonIncrementalSearch: true,
   claudeQueuedCancelAccounting: false,
-  codexSteer: false, rpcRequestDeadline: false, codexUncorrelatedResponseRedaction: false, codexCommands: false,
+  codexSteer: false, rpcRequestDeadline: false, codexUncorrelatedResponseRedaction: true, codexCommands: false,
   codexToolNames: false, fileEdits: false, stopVerdictObserver: false, windowsShippedSupervisor: false,
-  claudeToolRuleArgv: false, claudeFoldedPromptSettlement: false,
+  claudeToolRuleArgv: true, claudeFoldedPromptSettlement: false,
 };
 test('reports the reviewed partial port honestly', () => {
-  assert.equal(reviewReference(metadata, review, observed), 'PHP behind TS: PARTIAL (23 contracts missing)');
+  assert.equal(reviewReference(metadata, review, observed), 'PHP behind TS: PARTIAL (21 contracts missing)');
   assert.deepEqual(Object.keys(contracts).sort(), Object.keys(observed).sort());
 });
 test('a newer published version refuses even if latest still names the reviewed release', () => {
@@ -45,8 +45,8 @@ test('unknown and unchecked inventory entries refuse', () => {
 
 for (const contract of ['claudeSettingSources', 'claudeStrictMcpConfig', 'claudeAppendSystemPromptFile',
   'claudePluginDirs', 'codexThreadConfig', 'claudeQueuedCancelAccounting',
-  'codexSteer', 'rpcRequestDeadline', 'codexUncorrelatedResponseRedaction', 'codexCommands', 'codexToolNames',
-  'fileEdits', 'stopVerdictObserver', 'windowsShippedSupervisor', 'claudeToolRuleArgv', 'claudeFoldedPromptSettlement']) {
+  'codexSteer', 'rpcRequestDeadline', 'codexCommands', 'codexToolNames',
+  'fileEdits', 'stopVerdictObserver', 'windowsShippedSupervisor', 'claudeFoldedPromptSettlement']) {
   test(`${contract} cannot silently disappear from the reviewed gap inventory`, () => {
     const knownMissing = review.knownMissing.filter(entry => entry.contract !== contract);
     assert.throws(() => reviewReference(metadata, {...review, knownMissing}, observed), new RegExp(`Unlisted missing PHP contract: ${contract}`));
@@ -80,9 +80,11 @@ test('the previously reviewed 0.37.0 inventory no longer satisfies a 0.42.0 late
 });
 
 test('each 0.38.0..0.42.0 gap is pinned to its first release', () => {
-  const firsts = {codexSteer: '0.38.0', rpcRequestDeadline: '0.38.0', codexUncorrelatedResponseRedaction: '0.38.0',
+  assert.equal(contracts.codexUncorrelatedResponseRedaction, '0.38.0');
+  assert.equal(contracts.claudeToolRuleArgv, '0.41.2');
+  const firsts = {codexSteer: '0.38.0', rpcRequestDeadline: '0.38.0',
     codexCommands: '0.39.0', codexToolNames: '0.39.0', fileEdits: '0.39.0', stopVerdictObserver: '0.40.0',
-    windowsShippedSupervisor: '0.41.0', claudeToolRuleArgv: '0.41.2', claudeFoldedPromptSettlement: '0.42.0'};
+    windowsShippedSupervisor: '0.41.0', claudeFoldedPromptSettlement: '0.42.0'};
   for (const [contract, since] of Object.entries(firsts)) {
     assert.equal(contracts[contract], since, contract);
     const wrong = {...review, knownMissing: review.knownMissing.map(entry => entry.contract === contract ? {...entry, since: '0.37.0'} : entry)};
@@ -91,14 +93,22 @@ test('each 0.38.0..0.42.0 gap is pinned to its first release', () => {
 });
 
 test('each 0.38.0..0.42.0 gap carries its own assigned number, never a placeholder or a neighbour', () => {
-  const replace = gap => ({...review, knownMissing: review.knownMissing.map(entry => entry.contract === 'codexUncorrelatedResponseRedaction' ? {...entry, gap} : entry)});
-  assert.throws(() => reviewReference(metadata, replace('G-TBD-codex-uncorrelated-redaction'), observed), /Missing gap citation/);
+  const replace = gap => ({...review, knownMissing: review.knownMissing.map(entry => entry.contract === 'codexSteer' ? {...entry, gap} : entry)});
+  assert.throws(() => reviewReference(metadata, replace('G-TBD-codex-steer'), observed), /Missing gap citation/);
   assert.throws(() => reviewReference(metadata, replace('G-298'), observed), /Wrong gap citation/);
   assert.throws(() => reviewReference(metadata, replace('G-141'), observed), /Wrong gap citation/);
 });
 
-test('the security hardening gaps cannot be marked present while still listed', () => {
-  for (const contract of ['codexUncorrelatedResponseRedaction', 'claudeToolRuleArgv', 'windowsShippedSupervisor']) {
-    assert.throws(() => reviewReference(metadata, review, {...observed, [contract]: true}), /Stale knownMissing/);
-  }
+test('the open supervisor security gap cannot be marked present while still listed', () => {
+  assert.throws(() => reviewReference(metadata, review, {...observed, windowsShippedSupervisor: true}), /Stale knownMissing/);
 });
+
+for (const [contract, gap, since] of [['codexUncorrelatedResponseRedaction', 'G-299', '0.38.0'], ['claudeToolRuleArgv', 'G-305', '0.41.2']]) {
+  test(`the ${gap} security fix (${contract}) cannot silently regress`, () => {
+    assert.throws(() => reviewReference(metadata, review, {...observed, [contract]: false}), new RegExp('Unlisted missing PHP contract: ' + contract));
+  });
+  test(`the ${gap} security fix (${contract}) cannot remain on the missing list`, () => {
+    const knownMissing = [...review.knownMissing, {contract, since, gap}];
+    assert.throws(() => reviewReference(metadata, {...review, knownMissing}, observed), /Stale knownMissing/);
+  });
+}

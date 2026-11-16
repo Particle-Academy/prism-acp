@@ -263,11 +263,24 @@ describe('ClaudeDriver against a process', function () {
         $first = $h->cli()[0];
 
         expect($first['argv'])->toBe(['--print', '--output-format', 'stream-json', '--input-format', 'stream-json', '--verbose', '--include-partial-messages',
-            '--permission-mode', 'dontAsk', '--model', 'haiku', '--allowed-tools', 'Read,Grep', '--disallowed-tools', 'Bash'])
+            '--permission-mode', 'dontAsk', '--model', 'haiku', '--allowed-tools', 'Read', 'Grep', '--disallowed-tools', 'Bash'])
             ->and($first['env'])->not->toContain('ANTHROPIC_API_KEY')
             ->and($h->driver->withheldCredentials())->toContain('ANTHROPIC_API_KEY')
             ->and($outcome->stopReason)->toBe('end_turn')
             ->and($h->said())->toBe('echo: hello');
+        $h->finish();
+    });
+
+    it('preserves comma, space, quotes and Unicode tool rules as separate values through an actual child argv (G-305)', function () {
+        $allowed = ['Bash(echo g258, comma space)', 'Read(path with spaces,commas/**)', 'Bash(echo "quoted, value")', 'Read(資料, one/**)'];
+        $denied = ['Bash(echo denied, two words)', 'Write'];
+        $h = new ClaudeHarness(new Loop, ['allowedTools' => $allowed, 'disallowedTools' => $denied]);
+        $h->driver->start();
+        $h->turn('hello');
+        $argv = $h->cli()[0]['argv'];
+
+        expect(array_slice($argv, (int) array_search('--allowed-tools', $argv, true)))
+            ->toBe(['--allowed-tools', ...$allowed, '--disallowed-tools', ...$denied]);
         $h->finish();
     });
 
