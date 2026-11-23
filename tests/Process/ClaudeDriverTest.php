@@ -50,12 +50,12 @@ final class ClaudeHarness
      * @param  array<string, mixed>  $options
      * @param  (Closure(array<string, mixed>): PermissionOutcome)|null  $decide
      */
-    public function __construct(public readonly Loop $loop, array $options = [], ?Closure $decide = null)
+    public function __construct(public readonly Loop $loop, array $options = [], ?Closure $decide = null, array $extraEnv = [])
     {
         $dir = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-claude-'.bin2hex(random_bytes(4));
         mkdir($dir);
         $this->log = $dir.DIRECTORY_SEPARATOR.'cli.log';
-        $parent = [...getenv(), 'FAKE_CLAUDE_LOG' => $this->log, 'ANTHROPIC_API_KEY' => 'sk-ant-must-not-reach-the-cli'];
+        $parent = [...getenv(), 'FAKE_CLAUDE_LOG' => $this->log, 'ANTHROPIC_API_KEY' => 'sk-ant-must-not-reach-the-cli', ...$extraEnv];
         $this->driver = new ClaudeDriver(new ClaudeDriverOptions(...[
             'cwd' => $dir,
             'binary' => PHP_BINARY,
@@ -250,7 +250,7 @@ describe('ClaudeDriver against a process', function () {
         try {
             $h->driver->start();
             $h->turn('settings');
-            expect(json_decode($h->said(), true, flags: JSON_THROW_ON_ERROR))->toBe(['deniedMcpServers' => [['serverName' => 'blocked']]]);
+            expect(json_decode($h->said(), true, flags: JSON_THROW_ON_ERROR))->toBe(['deniedMcpServers' => [['serverName' => 'blocked']], 'disableRemoteControl' => true]);
         } finally {
             $h->finish();
         }
@@ -263,7 +263,7 @@ describe('ClaudeDriver against a process', function () {
         $first = $h->cli()[0];
 
         expect($first['argv'])->toBe(['--print', '--output-format', 'stream-json', '--input-format', 'stream-json', '--verbose', '--include-partial-messages',
-            '--permission-mode', 'dontAsk', '--model', 'haiku', '--allowed-tools', 'Read', 'Grep', '--disallowed-tools', 'Bash'])
+            '--permission-mode', 'dontAsk', '--model', 'haiku', '--allowed-tools', 'Read', 'Grep', '--disallowed-tools', 'Bash', '--settings', '{"disableRemoteControl":true}'])
             ->and($first['env'])->not->toContain('ANTHROPIC_API_KEY')
             ->and($h->driver->withheldCredentials())->toContain('ANTHROPIC_API_KEY')
             ->and($outcome->stopReason)->toBe('end_turn')
@@ -280,7 +280,7 @@ describe('ClaudeDriver against a process', function () {
         $argv = $h->cli()[0]['argv'];
 
         expect(array_slice($argv, (int) array_search('--allowed-tools', $argv, true)))
-            ->toBe(['--allowed-tools', ...$allowed, '--disallowed-tools', ...$denied]);
+            ->toBe(['--allowed-tools', ...$allowed, '--disallowed-tools', ...$denied, '--settings', '{"disableRemoteControl":true}']);
         $h->finish();
     });
 
@@ -369,6 +369,53 @@ describe('ClaudeDriver against a process', function () {
         $h->finish();
         expect(is_file($path))->toBeFalse()->and(is_dir(dirname($path)))->toBeFalse();
     });
+
+    it('launches with remote control off and exactly one settings value', function () {
+        $h = new ClaudeHarness(new Loop);
+        try {
+            $h->driver->start();
+            $h->turn('hello');
+            $argv = $h->cli()[0]['argv'];
+            $at = array_search('--settings', $argv, true);
+            expect(array_count_values($argv)['--settings'])->toBe(1)
+                ->and(json_decode((string) $argv[$at + 1], true, flags: JSON_THROW_ON_ERROR))->toBe(['disableRemoteControl' => true]);
+        } finally {
+            $h->finish();
+        }
+    });
+
+    it('keeps remote control off in the settings file an approval launch writes', function () {
+        $h = new ClaudeHarness(new Loop, ['permissionPrompts' => ['Bash']], static fn (): PermissionOutcome => PermissionOutcome::selected('allow_once'));
+        try {
+            $h->driver->start();
+            $h->turn('settings');
+            $settings = json_decode($h->said(), true, flags: JSON_THROW_ON_ERROR);
+            expect($settings['disableRemoteControl'])->toBeTrue()
+                ->and($settings)->toHaveKey('hooks')
+                ->and(array_count_values($h->cli()[0]['argv'])['--settings'])->toBe(1);
+        } finally {
+            $h->finish();
+        }
+    });
+
+    it('does not hand the child a reserved credential a host allow-listed, in any spelling', function (string $name) {
+        $h = new ClaudeHarness(new Loop, ['allowEnv' => ['FAKE_CLAUDE_LOG', $name, 'PRISM_FIXTURE_ALLOWED']], null,
+            [$name => 'fixture-value', 'PRISM_FIXTURE_ALLOWED' => 'fixture-value']);
+        try {
+            $h->driver->start();
+            $h->turn('hello');
+            $seen = array_map(static fn (string $key): string => mb_strtoupper($key, 'UTF-8'), $h->cli()[0]['env']);
+            expect($h->driver->withheldCredentials())->toContain($name)
+                ->and($seen)->not->toContain(mb_strtoupper($name, 'UTF-8'))
+                ->and($seen)->toContain('PRISM_FIXTURE_ALLOWED');
+        } finally {
+            $h->finish();
+        }
+    })->with([
+        'ANTHROPIC_PROFILE', 'ANTHROPIC_FEDERATION_RULE_ID', 'ANTHROPIC_ORGANIZATION_ID',
+        'ANTHROPIC_IDENTITY_TOKEN', 'ANTHROPIC_IDENTITY_TOKEN_FILE',
+        'anthropic_profile', 'Anthropic_Identity_Token', 'aNtHrOpIc_OrGaNiZaTiOn_Id',
+    ]);
 
     it('ends the whole tree on stop and says so', function () {
         $h = new ClaudeHarness(new Loop);

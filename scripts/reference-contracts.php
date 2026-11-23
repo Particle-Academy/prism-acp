@@ -288,6 +288,22 @@ function childEnvCredentialListCurrent(): bool
     return array_diff($reviewed, $listed) === [];
 }
 
+function claudeLaunchSettingsForced(): bool
+{
+    $args = ClaudeDriver::args(new ClaudeDriverOptions(cwd: sys_get_temp_dir()));
+    $at = array_search('--settings', $args, true);
+    if ($at === false || json_decode((string) ($args[$at + 1] ?? ''), true) !== ['disableRemoteControl' => true]) {
+        return false;
+    }
+    try {
+        new ClaudeDriver(new ClaudeDriverOptions(cwd: sys_get_temp_dir(), binaryArgs: [' --SETTINGS=x']));
+    } catch (InvalidArgumentException) {
+        return true;
+    }
+
+    return false;
+}
+
 $metaConstants = (new ReflectionClass(Meta::class))->getConstants();
 echo json_encode([
     'readRateLimits' => publicMethod(CodexDriver::class, 'readRateLimits'),
@@ -324,6 +340,6 @@ echo json_encode([
     'claudeAccountSelection' => property_exists(ClaudeDriverOptions::class, 'configDir') || class_exists('Prism\\Acp\\Claude\\ClaudeAccounts'),
     'childEnvCredentialList' => childEnvCredentialListCurrent(),
     'claudeSharedSessions' => sourceMentions('sharedSessions'),
-    'claudeLaunchSettings' => in_array('--settings', ClaudeDriver::args(new ClaudeDriverOptions(cwd: sys_get_temp_dir())), true),
+    'claudeLaunchSettings' => claudeLaunchSettingsForced(),
     'claudeBrowserSignIn' => class_exists('Prism\\Acp\\Claude\\ClaudeLoginError') || sourceMentions('auth login'),
 ], JSON_THROW_ON_ERROR)."\n";

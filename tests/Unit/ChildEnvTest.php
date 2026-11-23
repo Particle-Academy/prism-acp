@@ -48,6 +48,35 @@ describe('the credential strip', function () {
     });
 });
 
+describe('reserved names under a host allow-list', function () {
+    it('withholds the name however it is spelled', function (string $name) {
+        $r = ChildEnv::build([$name => SECRET], allow: [$name]);
+        expect($r->env)->toBe([])->and($r->withheld)->toBe([$name]);
+    })->with([
+        'ANTHROPIC_PROFILE', 'ANTHROPIC_FEDERATION_RULE_ID', 'ANTHROPIC_ORGANIZATION_ID',
+        'ANTHROPIC_IDENTITY_TOKEN', 'ANTHROPIC_IDENTITY_TOKEN_FILE',
+        'anthropic_profile', 'Anthropic_Federation_Rule_Id', 'aNtHrOpIc_OrGaNiZaTiOn_Id',
+        'anthropic_identity_token', 'ANTHROPIC_identity_TOKEN_file',
+        // The reference folds with full Unicode case mapping, under which these are the reserved names.
+        "ANTHROP\u{0131}C_PROFILE", "ANTHROPIC_BA\u{017F}E_URL",
+    ]);
+
+    it('is not opened by a padded or differently spelled allow-list entry', function (string $entry) {
+        $r = ChildEnv::build(['ANTHROPIC_PROFILE' => SECRET], allow: [$entry]);
+        expect($r->env)->toBe([])->and($r->withheld)->toBe(['ANTHROPIC_PROFILE']);
+    })->with(['ANTHROPIC_PROFILE ', ' ANTHROPIC_PROFILE', "ANTHROPIC_PROFILE\t", "ANTHROPIC_PROFILE\u{200B}", 'anthropic_profile']);
+
+    it('treats a padded variable as a different, unlisted variable, as the reference does', function () {
+        $r = ChildEnv::build(['ANTHROPIC_PROFILE ' => SECRET]);
+        expect($r->env)->toBe([])->and($r->withheld)->toBe([]);
+    });
+
+    it('still passes them under the one explicitly named option (the positive control)', function () {
+        $r = ChildEnv::build(['ANTHROPIC_PROFILE' => 'fixture'], allowSubscriptionOverridingCredentials: true);
+        expect($r->env)->toBe(['ANTHROPIC_PROFILE' => 'fixture'])->and($r->withheld)->toBe([]);
+    });
+});
+
 describe('the allow-list', function () {
     it('passes through what a CLI needs to run', function () {
         $parent = ['PATH' => '/usr/bin', 'HOME' => '/home/u', 'SYSTEMROOT' => 'C:\\Windows'];
@@ -90,6 +119,6 @@ describe('the lists themselves', function () {
     });
 
     it('is the reference list, name for name (prism-acp-ts src/env.ts)', function () {
-        expect(count(ChildEnv::OUTRANKING_CREDENTIALS))->toBe(8)->and(count(ChildEnv::BASE_ALLOW))->toBe(33);
+        expect(count(ChildEnv::OUTRANKING_CREDENTIALS))->toBe(13)->and(count(ChildEnv::BASE_ALLOW))->toBe(33);
     });
 });

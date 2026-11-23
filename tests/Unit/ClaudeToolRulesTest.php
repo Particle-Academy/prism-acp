@@ -14,7 +14,7 @@ it('passes each rule as its own value after one flag', function (string $field) 
     $args = ClaudeDriver::args(new ClaudeDriverOptions(...['cwd' => '/w', $field => TOOL_RULES, 'model' => 'sonnet']));
 
     expect(array_values(array_filter($args, fn (string $value) => $value === $flag)))->toHaveCount(1)
-        ->and(array_slice($args, (int) array_search($flag, $args, true) + 1))->toBe(TOOL_RULES);
+        ->and(array_slice($args, (int) array_search($flag, $args, true) + 1))->toBe([...TOOL_RULES, '--settings', '{"disableRemoteControl":true}']);
 })->with(['allowedTools', 'disallowedTools']);
 
 it('keeps both lists separate, in order, without delimiters', function () {
@@ -22,7 +22,7 @@ it('keeps both lists separate, in order, without delimiters', function () {
     $args = ClaudeDriver::args(new ClaudeDriverOptions(cwd: '/w', allowedTools: TOOL_RULES, disallowedTools: $denied));
 
     expect(array_slice($args, (int) array_search('--allowed-tools', $args, true)))
-        ->toBe(['--allowed-tools', ...TOOL_RULES, '--disallowed-tools', ...$denied]);
+        ->toBe(['--allowed-tools', ...TOOL_RULES, '--disallowed-tools', ...$denied, '--settings', '{"disableRemoteControl":true}']);
 });
 
 it('emits no flag for an empty list', function () {
