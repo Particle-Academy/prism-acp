@@ -11,6 +11,7 @@ use Prism\Acp\Codex\CodexRemoteControl;
 use Prism\Acp\Codex\CodexTransport;
 use Prism\Acp\Codex\CodexTransportHandlers;
 use Prism\Acp\Codex\CodexTransportOptions;
+use Prism\Acp\Codex\GuardedCodexTransport;
 use Prism\Acp\Codex\StdioCodexTransport;
 use Prism\Acp\JsonRpc\JsonRpcPeer;
 use Prism\Acp\Ndjson\Json;
@@ -218,8 +219,104 @@ it('writes the value it checked when a frame serializes differently the second t
     expect(Json::encode(CodexRemoteControl::checkedFrame($frame)))->toBe('{"jsonrpc":"2.0","method":"thread/start"}');
 });
 
-it('refuses a method it cannot read rather than writing it', function () {
-    expect(codexSendRefusal(['jsonrpc' => '2.0', 'id' => 1, 'method' => "remoteControl/enable\xFF"]))->toBe(CODEX_REFUSAL);
+it('refuses a method it cannot encode rather than writing it', function () {
+    expect(codexSendRefusal(['jsonrpc' => '2.0', 'id' => 1, 'method' => "remoteControl/enable\xFF"]))->toBe(JsonException::class);
+});
+
+/** A value that serializes as harmless the first time and as the refused name afterwards. */
+function changingCodexMethod(): JsonSerializable
+{
+    return new class implements JsonSerializable
+    {
+        private int $calls = 0;
+
+        public function jsonSerialize(): string
+        {
+            return $this->calls++ === 0 ? 'thread/start' : 'remoteControl/enable';
+        }
+    };
+}
+
+function guardedRecorder(): array
+{
+    $loop = new Loop;
+    $inner = new RecordingCodexTransport(new CodexTransportHandlers(
+        onFrame: static fn (mixed $frame) => null,
+        onStderr: static fn (string $line) => null,
+        onProblem: static fn (string $problem, ?bool $recoverable = null) => null,
+        onExit: static fn (?int $code, ?string $signal) => null,
+    ), $loop);
+
+    return [new GuardedCodexTransport($inner), $inner];
+}
+
+describe('Codex list frames', function () {
+    it('refuses a list carrying the method, at any depth', function (string $method) {
+        $request = ['jsonrpc' => '2.0', 'id' => 1, 'method' => $method];
+        $benign = ['jsonrpc' => '2.0', 'id' => 2, 'method' => 'thread/start'];
+        foreach ([[$request], [$benign, $request], [[$request]], [$benign, [$benign, [(object) $request]]]] as $frame) {
+            expect(codexSendRefusal($frame))->toBe(CODEX_REFUSAL);
+        }
+    })->with('codex refused methods');
+
+    it('refuses every list frame, because nothing in the driver sends one', function () {
+        expect(codexSendRefusal([]))->toBe(CODEX_REFUSAL)
+            ->and(codexSendRefusal([['jsonrpc' => '2.0', 'id' => 2, 'method' => 'thread/start']]))->toBe(CODEX_REFUSAL);
+    });
+
+    it('refuses a value that serializes to a list', function () {
+        $frame = new class implements JsonSerializable
+        {
+            public function jsonSerialize(): array
+            {
+                return [['jsonrpc' => '2.0', 'id' => 1, 'method' => 'remoteControl/enable']];
+            }
+        };
+        expect(codexSendRefusal($frame))->toBe(CODEX_REFUSAL);
+    });
+
+    it('refuses a list at the guard, before any custom transport', function () {
+        [$guarded, $inner] = guardedRecorder();
+        $thrown = null;
+        try {
+            $guarded->send([['jsonrpc' => '2.0', 'id' => 1, 'method' => ' REMOTECONTROL/ENABLE']]);
+        } catch (Throwable $caught) {
+            $thrown = $caught::class;
+        }
+        expect($thrown)->toBe(CODEX_REFUSAL)->and($inner->sent)->toBe([]);
+    });
+});
+
+describe('Codex frames are checked as written', function () {
+    it('refuses a method hidden behind a serializable value', function (string $method) {
+        $value = new class($method) implements JsonSerializable
+        {
+            public function __construct(private readonly string $method) {}
+
+            public function jsonSerialize(): string
+            {
+                return $this->method;
+            }
+        };
+        expect(codexSendRefusal(['jsonrpc' => '2.0', 'id' => 1, 'method' => $value]))->toBe(CODEX_REFUSAL);
+    })->with('codex refused methods');
+
+    it('hands a custom transport the value it checked when the method serializes differently later', function () {
+        [$guarded, $inner] = guardedRecorder();
+        $guarded->send(['jsonrpc' => '2.0', 'id' => 1, 'method' => changingCodexMethod()]);
+        expect(strtolower(Json::encode($inner->sent)))->not->toContain('remotecontrol')
+            ->and($inner->sent[0]->method)->toBe('thread/start');
+    });
+
+    it('keeps an ordinary array frame as the array a custom transport already receives', function () {
+        $frame = ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'thread/start', 'params' => ['config' => new stdClass]];
+        expect(CodexRemoteControl::checkedFrame($frame))->toBe($frame);
+    });
+
+    it('passes a reply whose result is a list naming the method (the positive control)', function () {
+        $frame = ['jsonrpc' => '2.0', 'id' => 3, 'result' => [['method' => 'remoteControl/enable']]];
+        expect(CodexRemoteControl::checkedFrame($frame))->toBe($frame);
+    });
 });
 
 it('passes ordinary requests and replies (the positive control)', function (mixed $frame) {

@@ -333,4 +333,44 @@ describe('CodexDriver against a contained process', function () {
         }
         expect($thrown)->toBe('Prism\Acp\Claude\RemoteControlRefused')->and($started)->toBeFalse();
     })->with(['--remote-control', ' daemon ', "cl\u{200D}oud"]);
+
+    it('writes no refused list frame to the real process, and the next frame still arrives', function (): void {
+        $log = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-codex-list-'.bin2hex(random_bytes(5)).'.log';
+        $loop = new Loop;
+        $transport = new StdioCodexTransport(new CodexTransportOptions(sys_get_temp_dir(),
+            [...getenv(), 'FAKE_CODEX_LOG' => $log], PHP_BINARY, [dirname(__DIR__).'/fixtures/fake-codex.php']),
+            new CodexTransportHandlers(onFrame: static fn (mixed $frame) => null, onStderr: static fn (string $line) => null,
+                onProblem: static fn (string $problem) => null, onExit: static fn () => null), $loop);
+        $timer = $loop->delay(15, static function (): void {
+            throw new RuntimeException('list frame fixture timed out');
+        });
+        try {
+            $transport->start()->await();
+            $request = ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'remoteControl/enable'];
+            $refused = 0;
+            foreach ([[$request], [[$request]], [['jsonrpc' => '2.0', 'id' => 2, 'method' => 'thread/start'], $request]] as $frame) {
+                try {
+                    $transport->send($frame);
+                } catch (Throwable $caught) {
+                    $refused += $caught::class === 'Prism\Acp\Claude\RemoteControlRefused' ? 1 : 0;
+                }
+            }
+            $transport->send(['jsonrpc' => '2.0', 'method' => 'initialized']);
+            $deadline = microtime(true) + 10;
+            while (! (is_file($log) && str_contains((string) file_get_contents($log), '"initialized"')) && microtime(true) < $deadline) {
+                $tick = new Deferred($loop);
+                $loop->delay(0.02, static fn () => $tick->resolve(null));
+                $tick->await();
+            }
+            $stdin = array_values(array_filter(array_map(static fn (string $line): mixed => json_decode($line, true)['stdin'] ?? null,
+                file($log, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) ?: [])));
+            expect($refused)->toBe(3)->and($stdin)->toBe([['jsonrpc' => '2.0', 'method' => 'initialized']]);
+        } finally {
+            $loop->cancel($timer);
+            $transport->stop(1000)->await();
+            if (is_file($log)) {
+                unlink($log);
+            }
+        }
+    });
 })->skip(PHP_OS_FAMILY !== 'Windows', 'The PHP provider transport currently supports Windows Job Objects only');
