@@ -74,11 +74,11 @@ final class StdioCodexTransport implements CodexTransport
 
     public function send(mixed $frame): void
     {
-        $frame = CodexRemoteControl::checkedFrame($frame);
+        $line = CodexRemoteControl::encodedFrame($frame);
         if ($this->provider === null || $this->provider->isClosed() || $this->closing) {
             throw new \RuntimeException('Codex app-server stdin is not open');
         }
-        $this->provider->provider->write(NdjsonFramer::encodeLine($frame));
+        $this->provider->provider->write($line);
     }
 
     public function close(): void
