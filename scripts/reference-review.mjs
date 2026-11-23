@@ -14,6 +14,11 @@ export const contracts = Object.freeze({
   codexCommands: '0.39.0', codexToolNames: '0.39.0', fileEdits: '0.39.0',
   stopVerdictObserver: '0.40.0', windowsShippedSupervisor: '0.41.0',
   claudeToolRuleArgv: '0.41.2', claudeFoldedPromptSettlement: '0.42.0',
+  codexFailureProviderMessage: '0.43.0', claudeMessageId: '0.43.0',
+  claudeUnsolicitedTurn: '0.44.0', driverLiveness: '0.44.0',
+  claudeAccountSelection: '0.45.0', childEnvCredentialList: '0.45.0',
+  claudeSharedSessions: '0.46.0', claudeLaunchSettings: '0.46.0',
+  claudeBrowserSignIn: '0.47.0',
 });
 
 // Assigned gaps are reviewed alongside release provenance; any numbered placeholder is insufficient.
@@ -26,6 +31,9 @@ const contractGaps = Object.freeze({
   codexSteer: 'G-297', rpcRequestDeadline: 'G-298', codexUncorrelatedResponseRedaction: 'G-299',
   codexCommands: 'G-300', codexToolNames: 'G-301', fileEdits: 'G-302', stopVerdictObserver: 'G-303',
   windowsShippedSupervisor: 'G-304', claudeToolRuleArgv: 'G-305', claudeFoldedPromptSettlement: 'G-306',
+  codexFailureProviderMessage: 'G-329', claudeMessageId: 'G-330', claudeUnsolicitedTurn: 'G-331', driverLiveness: 'G-332',
+  claudeAccountSelection: 'G-333', childEnvCredentialList: 'G-334', claudeSharedSessions: 'G-335',
+  claudeLaunchSettings: 'G-336', claudeBrowserSignIn: 'G-337',
 });
 
 function core(version) {
