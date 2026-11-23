@@ -26,6 +26,7 @@ use Prism\Acp\Claude\ClaudeDriverOptions;
 use Prism\Acp\Claude\ClaudeToAcp;
 use Prism\Acp\Codex\CodexDriver;
 use Prism\Acp\Codex\CodexDriverOptions;
+use Prism\Acp\Codex\CodexRemoteControl;
 use Prism\Acp\Codex\CodexTransport;
 use Prism\Acp\Codex\CodexTransportHandlers;
 use Prism\Acp\Codex\CodexTransportOptions;
@@ -298,7 +299,15 @@ function claudeLaunchSettingsForced(): bool
     try {
         new ClaudeDriver(new ClaudeDriverOptions(cwd: sys_get_temp_dir(), binaryArgs: [' --SETTINGS=x']));
     } catch (InvalidArgumentException) {
-        return true;
+        try {
+            new CodexDriver(new CodexDriverOptions(cwd: sys_get_temp_dir(), binaryArgs: [' DAEMON']));
+        } catch (InvalidArgumentException) {
+            try {
+                CodexRemoteControl::checkedFrame(['method' => ' REMOTECONTROL/ENABLE']);
+            } catch (InvalidArgumentException) {
+                return true;
+            }
+        }
     }
 
     return false;

@@ -290,4 +290,47 @@ describe('CodexDriver against a contained process', function () {
             $transport->stop(1000)->await();
         }
     });
+
+    it('never writes a remote-control frame to the real process, and the session keeps working', function (string $method): void {
+        $h = new CodexHarness(new Loop);
+        try {
+            $h->driver->start();
+            $h->driver->ready()->await();
+            $peer = (new ReflectionProperty(CodexDriver::class, 'peer'))->getValue($h->driver);
+            $thrown = null;
+            try {
+                $peer->request($method, ['fixture' => true])->await();
+            } catch (Throwable $caught) {
+                $thrown = $caught::class;
+            }
+            $outcome = $h->turn('after refusal');
+            $written = array_map(static fn (array $frame): string => (string) ($frame['method'] ?? ''), array_column($h->cli(), 'stdin'));
+            expect($thrown)->toBe('Prism\Acp\Claude\RemoteControlRefused')
+                ->and(array_values(array_filter($written, static fn (string $name): bool => stripos($name, 'control') !== false)))->toBe([])
+                ->and($outcome->stopReason)->toBe('end_turn');
+        } finally {
+            $h->driver->stop(1000)->await();
+        }
+    })->with(['remoteControl/enable', ' REMOTECONTROL/ENABLE', "remote\u{200B}Control/status"]);
+
+    it('starts no process for a refused host argument', function (string $arg): void {
+        $log = sys_get_temp_dir().DIRECTORY_SEPARATOR.'prism-acp-codex-refused-'.bin2hex(random_bytes(5)).'.log';
+        $loop = new Loop;
+        $transport = new StdioCodexTransport(new CodexTransportOptions(sys_get_temp_dir(),
+            [...getenv(), 'FAKE_CODEX_LOG' => $log], PHP_BINARY, [dirname(__DIR__).'/fixtures/fake-codex.php', $arg]),
+            new CodexTransportHandlers(onFrame: static fn (mixed $frame) => null, onStderr: static fn (string $line) => null,
+                onProblem: static fn (string $problem) => null, onExit: static fn () => null), $loop);
+        $thrown = null;
+        try {
+            $transport->start()->await();
+        } catch (Throwable $caught) {
+            $thrown = $caught::class;
+        }
+        $transport->stop(1000)->await();
+        $started = is_file($log);
+        if ($started) {
+            unlink($log);
+        }
+        expect($thrown)->toBe('Prism\Acp\Claude\RemoteControlRefused')->and($started)->toBeFalse();
+    })->with(['--remote-control', ' daemon ', "cl\u{200D}oud"]);
 })->skip(PHP_OS_FAMILY !== 'Windows', 'The PHP provider transport currently supports Windows Job Objects only');

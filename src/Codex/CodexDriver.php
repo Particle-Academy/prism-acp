@@ -145,6 +145,7 @@ final class CodexDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, R
         if ($options->model !== null) {
             Meta::assertModel($options->model);
         }
+        CodexRemoteControl::assertHostArgs($options->binaryArgs);
         if ($options->approvalPolicy !== null && ! in_array($options->approvalPolicy, ['untrusted', 'on-request', 'never'], true)) {
             throw new \InvalidArgumentException('approvalPolicy must be one of: untrusted, on-request, never');
         }
@@ -230,7 +231,7 @@ final class CodexDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, R
                 $this->events->onProtocolError?->__invoke($problem, $recoverable);
             },
             onExit: fn (?int $code, ?string $signal) => $this->onExit($code, $signal));
-        $transport = ($this->transportFactory)(new CodexTransportOptions($this->options->cwd, $built->env, $this->options->binary, $this->options->binaryArgs), $handlers);
+        $transport = new GuardedCodexTransport(($this->transportFactory)(new CodexTransportOptions($this->options->cwd, $built->env, $this->options->binary, $this->options->binaryArgs), $handlers));
         $this->transport = $transport;
         $this->peer = new JsonRpcPeer(send: fn (mixed $frame) => $transport->send($frame),
             // G-299, as the reference since 0.38.0: a reply this peer cannot correlate may echo our input, private

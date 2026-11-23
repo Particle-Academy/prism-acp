@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Prism\Acp\Claude;
 
 use Prism\Acp\Ndjson\Json;
+use Prism\Acp\Support\LaunchToken;
 
 /**
  * The settings every Claude launch carries: remote control is off, and no option turns it back on.
@@ -25,9 +26,6 @@ final class ClaudeLaunchSettings
         '--remote-control', '--remote-control-session-name-prefix', 'remote-control', '--rc', '--cloud', '--remote',
         '--teleport', '--settings',
     ];
-
-    /** The reference's PADDING: JavaScript's `\s`, spelled out, plus the invisible format characters. */
-    private const PADDING = '/[\x{09}-\x{0d}\x{20}\x{a0}\x{ad}\x{1680}\x{180e}\x{2000}-\x{200f}\x{2028}-\x{202f}\x{205f}-\x{2064}\x{3000}\x{feff}]/u';
 
     /**
      * Merge the forced keys into settings a launch already passes. The other keys are kept; the forced ones win.
@@ -56,14 +54,11 @@ final class ClaudeLaunchSettings
     public static function assertHostArgs(array $args): void
     {
         foreach ($args as $arg) {
-            if (! is_string($arg) || ! mb_check_encoding($arg, 'UTF-8')) {
+            $token = is_string($arg) ? LaunchToken::normalise($arg) : null;
+            if ($token === null) {
                 throw new RemoteControlRefused('binaryArgs must be valid UTF-8 strings');
             }
-            $stripped = preg_replace(self::PADDING, '', $arg);
-            if ($stripped === null) {
-                throw new RemoteControlRefused('binaryArgs must be valid UTF-8 strings');
-            }
-            $token = explode('=', mb_strtolower($stripped, 'UTF-8'), 2)[0];
+            $token = explode('=', $token, 2)[0];
             if (in_array($token, self::REFUSED, true)) {
                 throw new RemoteControlRefused("binaryArgs may not carry {$token}: remote control is forced off for claude launches");
             }
