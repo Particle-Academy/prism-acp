@@ -23,11 +23,13 @@ use Prism\Acp\Async\Loop;
 use Prism\Acp\Claude\Approvals;
 use Prism\Acp\Claude\ClaudeDriver;
 use Prism\Acp\Claude\ClaudeDriverOptions;
+use Prism\Acp\Claude\ClaudeToAcp;
 use Prism\Acp\Codex\CodexDriver;
 use Prism\Acp\Codex\CodexDriverOptions;
 use Prism\Acp\Codex\CodexTransport;
 use Prism\Acp\Codex\CodexTransportHandlers;
 use Prism\Acp\Codex\CodexTransportOptions;
+use Prism\Acp\Env\ChildEnv;
 use Prism\Acp\JsonRpc\JsonRpcPeer;
 use Prism\Acp\Meta;
 use Prism\Acp\Ndjson\Json;
@@ -36,6 +38,7 @@ use Prism\Acp\Process\ProcessTree;
 use Prism\Acp\Process\Provider;
 use Prism\Acp\Process\StopVerdict;
 use Prism\Acp\Process\WindowsSupervisorBuild;
+use Prism\Acp\TurnFailure;
 use Prism\Acp\Version;
 
 function publicMethod(string $class, string $method): bool
@@ -226,6 +229,65 @@ function invokesRuntimeCompiler(): bool
     return false;
 }
 
+/** Whether any source file names a contract's own identifier: conservative, so a partial port still forces a review. */
+function sourceMentions(string ...$needles): bool
+{
+    $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(dirname(__DIR__).'/src', FilesystemIterator::SKIP_DOTS));
+    foreach ($files as $file) {
+        if (! $file->isFile()) {
+            continue;
+        }
+        $source = (string) file_get_contents($file->getPathname());
+        foreach ($needles as $needle) {
+            if (str_contains($source, $needle)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+/** Map a real streamed reply through the Claude mapper: present only when every text chunk carries a message id (0.43.0). */
+function claudeChunksCarryMessageId(): bool
+{
+    $mapper = new ClaudeToAcp;
+    $updates = [];
+    foreach ([
+        '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_start","message":{"id":"msg_owned_inventory"}}}',
+        '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}',
+        '{"type":"stream_event","parent_tool_use_id":null,"event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"owned"}}}',
+    ] as $line) {
+        array_push($updates, ...$mapper->frame(Json::decode($line)));
+    }
+    $chunks = array_filter($updates, fn (array $update): bool => ($update['sessionUpdate'] ?? null) === 'agent_message_chunk');
+    if ($chunks === []) {
+        throw new RuntimeException('Inventory message-id probe observed no agent_message_chunk');
+    }
+    foreach ($chunks as $chunk) {
+        if (! is_string($chunk['messageId'] ?? null) || $chunk['messageId'] === '') {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/** The child-environment credential list, compared by digest with the names reviewed at 0.45.0. */
+function childEnvCredentialListCurrent(): bool
+{
+    $reviewed = [
+        '00f8034c10c47732ae132d92673dfd09f170c1131bfa0794ff8f67bff4d78e07',
+        '6a8710903233ff5d24f946a09d53941ae2922efc2a848a4610663cf68e60ee5d',
+        '9625ac9a688c2752d8f8652ee70281adb79b32ae23b3f13dc38645e7f9d61e06',
+        'ddf482682d55f49ff56ec999a991bbedce7ce81ab7714a690589f3ff42656284',
+        '527c75332cc7453ecac9f4fddd55801b5601c3835e17923eec4f521491d9a94f',
+    ];
+    $listed = array_map(fn (string $name): string => hash('sha256', $name), ChildEnv::OUTRANKING_CREDENTIALS);
+
+    return array_diff($reviewed, $listed) === [];
+}
+
 $metaConstants = (new ReflectionClass(Meta::class))->getConstants();
 echo json_encode([
     'readRateLimits' => publicMethod(CodexDriver::class, 'readRateLimits'),
@@ -255,4 +317,13 @@ echo json_encode([
     'windowsShippedSupervisor' => ! invokesRuntimeCompiler(),
     'claudeToolRuleArgv' => claudeToolRulesHardened(),
     'claudeFoldedPromptSettlement' => property_exists(TurnOutcome::class, 'foldedInto'),
+    'codexFailureProviderMessage' => property_exists(TurnFailure::class, 'providerMessage'),
+    'claudeMessageId' => claudeChunksCarryMessageId(),
+    'claudeUnsolicitedTurn' => property_exists(TurnOutcome::class, 'unsolicited'),
+    'driverLiveness' => publicMethod(ClaudeDriver::class, 'ping') || publicMethod(CodexDriver::class, 'ping') || publicMethod(CodexDriver::class, 'running') || sourceMentions('lastFrameAt'),
+    'claudeAccountSelection' => property_exists(ClaudeDriverOptions::class, 'configDir') || class_exists('Prism\\Acp\\Claude\\ClaudeAccounts'),
+    'childEnvCredentialList' => childEnvCredentialListCurrent(),
+    'claudeSharedSessions' => sourceMentions('sharedSessions'),
+    'claudeLaunchSettings' => in_array('--settings', ClaudeDriver::args(new ClaudeDriverOptions(cwd: sys_get_temp_dir())), true),
+    'claudeBrowserSignIn' => class_exists('Prism\\Acp\\Claude\\ClaudeLoginError') || sourceMentions('auth login'),
 ], JSON_THROW_ON_ERROR)."\n";

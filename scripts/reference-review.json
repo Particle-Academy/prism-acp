@@ -1,6 +1,6 @@
 {
   "goldenBaseline": "0.25.1",
-  "reviewedLatest": "0.42.0",
+  "reviewedLatest": "0.47.0",
   "knownMissing": [
     {"contract": "readRateLimits", "since": "0.26.0", "gap": "G-141"},
     {"contract": "mcpServerStatus", "since": "0.27.0", "gap": "G-141"},
@@ -22,6 +22,15 @@
     {"contract": "fileEdits", "since": "0.39.0", "gap": "G-302"},
     {"contract": "stopVerdictObserver", "since": "0.40.0", "gap": "G-303"},
     {"contract": "windowsShippedSupervisor", "since": "0.41.0", "gap": "G-304"},
-    {"contract": "claudeFoldedPromptSettlement", "since": "0.42.0", "gap": "G-306"}
+    {"contract": "claudeFoldedPromptSettlement", "since": "0.42.0", "gap": "G-306"},
+    {"contract": "codexFailureProviderMessage", "since": "0.43.0", "gap": "G-329"},
+    {"contract": "claudeMessageId", "since": "0.43.0", "gap": "G-330"},
+    {"contract": "claudeUnsolicitedTurn", "since": "0.44.0", "gap": "G-331"},
+    {"contract": "driverLiveness", "since": "0.44.0", "gap": "G-332"},
+    {"contract": "claudeAccountSelection", "since": "0.45.0", "gap": "G-333"},
+    {"contract": "childEnvCredentialList", "since": "0.45.0", "gap": "G-334"},
+    {"contract": "claudeSharedSessions", "since": "0.46.0", "gap": "G-335"},
+    {"contract": "claudeLaunchSettings", "since": "0.46.0", "gap": "G-336"},
+    {"contract": "claudeBrowserSignIn", "since": "0.47.0", "gap": "G-337"}
   ]
 }

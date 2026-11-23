@@ -186,8 +186,8 @@ fixtures from its corresponding source commit, hostile mutations and 648 reader 
 requests, permissions and failures against that reference. CI regenerates these expectations and fails on drift.
 Codex scenarios exercise the published driver's actual state machine through synthetic protocol frames, including
 outbound RPC, updates, approvals, failures and MCP policy. They are synthetic scenarios, not native turn captures.
-**PHP behind TS: PARTIAL (21 contracts missing).** The executed golden baseline remains 0.25.1; reference releases
-through 0.42.0 have been reviewed. Missing contracts tracked by G-141 are 0.26 readRateLimits, 0.27 MCP server status,
+**PHP behind TS: PARTIAL (30 contracts missing).** The executed golden baseline remains 0.25.1; reference releases
+through 0.47.0 have been reviewed. Missing contracts tracked by G-141 are 0.26 readRateLimits, 0.27 MCP server status,
 0.28 AppContainer LOCAL, 0.29 Codex nativeTools, 0.31 replay markers/opt-out, G-140's 0.32 restricted startup flags,
 and 0.33 Claude app-MCP-only native-tool restriction.
 Additional gaps are Claude setting sources (G-233), strict MCP config (G-234), prompt-file append (G-235), plugin paths
@@ -195,9 +195,9 @@ Additional gaps are Claude setting sources (G-233), strict MCP config (G-234), p
 (G-238). Releases 0.38.0 to 0.42.0 add eight more: Codex steering (G-297), per-request RPC deadlines (G-298), Codex
 compact/review commands (G-300), Codex tool names (G-301), FileEdit metadata (G-302), stop verdict observers (G-303),
 the shipped Windows supervisor (G-304), and settlement of prompts Claude folds into a running turn (G-306). Uncorrelated
-Codex RPC response handling (G-299) and Claude tool-rule argv (G-305) are present and enforced. Default agent version reporting and caller overrides are
+Codex RPC response handling (G-299) and Claude tool-rule argv (G-305) are present and enforced. Releases 0.43.0 to 0.47.0 add nine more: Codex provider failure messages (G-329), Claude message ids (G-330), self-started Claude turns (G-331), driver liveness (G-332), Claude account selection (G-333), the child-environment credential list (G-334), shared Claude sessions (G-335), Claude launch settings (G-336), and browser sign-in (G-337). Default agent version reporting and caller overrides are
 already present. The framing fix (G-232) is also present, as confirmed by the bounded native search probe. See the
-[release-by-release review](docs/reference-review-0.42.0.md) and its [0.37.0 predecessor](docs/reference-review-0.37.0.md).
+[release-by-release review](docs/reference-review-0.47.0.md) and its [0.42.0](docs/reference-review-0.42.0.md) and [0.37.0](docs/reference-review-0.37.0.md) predecessors.
 The currency watchdog executes PHP API/cache-reader, initialize, bounded framing-search, uncorrelated-response and
 tool-rule argv probes, refuses an unreviewed newer published version, and
 refuses either a missing contract absent from this list or a newly exposed contract still listed as missing.
