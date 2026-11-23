@@ -17,7 +17,7 @@ other one applies to the port and is recorded as a gap.
 | [0.45.0](https://github.com/Particle-Academy/prism-acp-ts/releases/tag/v0.45.0) | Claude account selection: `claudeAccounts` and `configDir` | Applies and missing | No account API or option; G-333 |
 | 0.45.0 | Child-environment credential list | Present | `src/Env/ChildEnv.php` |
 | [0.46.0](https://github.com/Particle-Academy/prism-acp-ts/releases/tag/v0.46.0) | Shared Claude sessions across account directories | Applies and missing; depends on G-333 | No `prepare` equivalent; G-335 |
-| 0.46.0 | Claude launch settings | Present for Claude launches | `src/Claude/ClaudeLaunchSettings.php`, `ClaudeDriver::args` |
+| 0.46.0 | Launch settings and remote-control refusal | Present for Claude and Codex | `src/Claude/ClaudeLaunchSettings.php`, `src/Codex/CodexRemoteControl.php` |
 | [0.47.0](https://github.com/Particle-Academy/prism-acp-ts/releases/tag/v0.47.0) | Browser-only Claude sign-in and sign-out | Applies and missing; depends on G-333 | No login API; G-337 |
 
 Changes outside `src/` in this range (release workflows, signing-bundle tooling, an account probe script) are TypeScript

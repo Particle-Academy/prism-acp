@@ -52,6 +52,7 @@ final class StdioCodexTransport implements CodexTransport
             if ($this->started) {
                 throw new \LogicException('Codex transport already started');
             }
+            CodexRemoteControl::assertHostArgs($this->options->binaryArgs);
             $this->started = true;
             $process = Provider::launch($this->options->binary,
                 [...$this->options->binaryArgs, 'app-server', '--listen', 'stdio://'],
@@ -73,6 +74,7 @@ final class StdioCodexTransport implements CodexTransport
 
     public function send(mixed $frame): void
     {
+        $frame = CodexRemoteControl::checkedFrame($frame);
         if ($this->provider === null || $this->provider->isClosed() || $this->closing) {
             throw new \RuntimeException('Codex app-server stdin is not open');
         }
