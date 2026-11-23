@@ -17,11 +17,11 @@ const observed = {
   codexToolNames: false, fileEdits: false, stopVerdictObserver: false, windowsShippedSupervisor: false,
   claudeToolRuleArgv: true, claudeFoldedPromptSettlement: false,
   codexFailureProviderMessage: false, claudeMessageId: false, claudeUnsolicitedTurn: false, driverLiveness: false,
-  claudeAccountSelection: false, childEnvCredentialList: false, claudeSharedSessions: false,
-  claudeLaunchSettings: false, claudeBrowserSignIn: false,
+  claudeAccountSelection: false, childEnvCredentialList: true, claudeSharedSessions: false,
+  claudeLaunchSettings: true, claudeBrowserSignIn: false,
 };
 test('reports the reviewed partial port honestly', () => {
-  assert.equal(reviewReference(metadata, review, observed), 'PHP behind TS: PARTIAL (30 contracts missing)');
+  assert.equal(reviewReference(metadata, review, observed), 'PHP behind TS: PARTIAL (28 contracts missing)');
   assert.deepEqual(Object.keys(contracts).sort(), Object.keys(observed).sort());
 });
 test('a newer published version refuses even if latest still names the reviewed release', () => {
@@ -51,7 +51,7 @@ for (const contract of ['claudeSettingSources', 'claudeStrictMcpConfig', 'claude
   'codexSteer', 'rpcRequestDeadline', 'codexCommands', 'codexToolNames',
   'fileEdits', 'stopVerdictObserver', 'windowsShippedSupervisor', 'claudeFoldedPromptSettlement',
   'codexFailureProviderMessage', 'claudeMessageId', 'claudeUnsolicitedTurn', 'driverLiveness', 'claudeAccountSelection',
-  'childEnvCredentialList', 'claudeSharedSessions', 'claudeLaunchSettings', 'claudeBrowserSignIn']) {
+  'claudeSharedSessions', 'claudeBrowserSignIn']) {
   test(`${contract} cannot silently disappear from the reviewed gap inventory`, () => {
     const knownMissing = review.knownMissing.filter(entry => entry.contract !== contract);
     assert.throws(() => reviewReference(metadata, {...review, knownMissing}, observed), new RegExp(`Unlisted missing PHP contract: ${contract}`));
@@ -125,8 +125,8 @@ test('the previously reviewed 0.42.0 inventory no longer satisfies a 0.47.0 late
 for (const [contract, since, gap] of [
   ['codexFailureProviderMessage', '0.43.0', 'G-329'], ['claudeMessageId', '0.43.0', 'G-330'],
   ['claudeUnsolicitedTurn', '0.44.0', 'G-331'], ['driverLiveness', '0.44.0', 'G-332'],
-  ['claudeAccountSelection', '0.45.0', 'G-333'], ['childEnvCredentialList', '0.45.0', 'G-334'],
-  ['claudeSharedSessions', '0.46.0', 'G-335'], ['claudeLaunchSettings', '0.46.0', 'G-336'],
+  ['claudeAccountSelection', '0.45.0', 'G-333'],
+  ['claudeSharedSessions', '0.46.0', 'G-335'],
   ['claudeBrowserSignIn', '0.47.0', 'G-337'],
 ]) {
   test(`${contract} is pinned to ${since} and ${gap}, and cannot stay listed once present`, () => {
@@ -135,5 +135,16 @@ for (const [contract, since, gap] of [
     assert.throws(() => reviewReference(metadata, replace({since: '0.42.0'}), observed), new RegExp('Wrong reference release for ' + contract));
     assert.throws(() => reviewReference(metadata, replace({gap: 'G-141'}), observed), new RegExp('Wrong gap citation for ' + contract));
     assert.throws(() => reviewReference(metadata, review, {...observed, [contract]: true}), /Stale knownMissing/);
+  });
+}
+
+for (const [contract, since, gap] of [['childEnvCredentialList', '0.45.0', 'G-334'], ['claudeLaunchSettings', '0.46.0', 'G-336']]) {
+  test(`${contract} cannot silently regress`, () => {
+    assert.equal(contracts[contract], since);
+    assert.throws(() => reviewReference(metadata, review, {...observed, [contract]: false}), new RegExp('Unlisted missing PHP contract: ' + contract));
+  });
+  test(`${contract} cannot remain on the missing list`, () => {
+    const knownMissing = [...review.knownMissing, {contract, since, gap}];
+    assert.throws(() => reviewReference(metadata, {...review, knownMissing}, observed), /Stale knownMissing/);
   });
 }

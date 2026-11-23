@@ -28,9 +28,7 @@
     {"contract": "claudeUnsolicitedTurn", "since": "0.44.0", "gap": "G-331"},
     {"contract": "driverLiveness", "since": "0.44.0", "gap": "G-332"},
     {"contract": "claudeAccountSelection", "since": "0.45.0", "gap": "G-333"},
-    {"contract": "childEnvCredentialList", "since": "0.45.0", "gap": "G-334"},
     {"contract": "claudeSharedSessions", "since": "0.46.0", "gap": "G-335"},
-    {"contract": "claudeLaunchSettings", "since": "0.46.0", "gap": "G-336"},
     {"contract": "claudeBrowserSignIn", "since": "0.47.0", "gap": "G-337"}
   ]
 }

@@ -161,6 +161,7 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         // Refused at construction, before any CLI process, as the reference does.
         ClaudeToolRuleError::rules($options->allowedTools, 'allowedTools');
         ClaudeToolRuleError::rules($options->disallowedTools, 'disallowedTools');
+        ClaudeLaunchSettings::assertHostArgs($options->binaryArgs);
         $this->disabledMcpServers = McpServers::readDisabled($options->disabledMcpServers, $options->mcpServers);
         $this->framer = new NdjsonFramer;
         $this->mapper = new ClaudeToAcp;
@@ -210,10 +211,10 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
             $args[] = '--mcp-config';
             $args[] = $mcpConfigPath;
         }
-        if ($settingsPath !== null) {
-            $args[] = '--settings';
-            $args[] = $settingsPath;
-        }
+        // Exactly one --settings. A settings file must already carry the forced keys: build it with
+        // ClaudeLaunchSettings::merge(), as start() does.
+        $args[] = '--settings';
+        $args[] = $settingsPath ?? ClaudeLaunchSettings::inline();
 
         return $args;
     }
@@ -346,7 +347,7 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
                 if ($this->disabledMcpServers !== []) {
                     $settings['deniedMcpServers'] = array_map(static fn (string $name): array => ['serverName' => $name], $this->disabledMcpServers);
                 }
-                self::writeNew($settingsPath, Json::encode($settings));
+                self::writeNew($settingsPath, Json::encode(ClaudeLaunchSettings::merge($settings)));
                 $this->approvalFiles[] = $settingsPath;
             }
             if ($tools !== null) {

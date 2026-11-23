@@ -29,6 +29,12 @@ final class ChildEnv
         'ANTHROPIC_API_URL',
         'CLAUDE_API_KEY',
         'CLAUDE_CODE_OAUTH_TOKEN',
+        // Anthropic profiles and Workload Identity Federation.
+        'ANTHROPIC_PROFILE',
+        'ANTHROPIC_FEDERATION_RULE_ID',
+        'ANTHROPIC_ORGANIZATION_ID',
+        'ANTHROPIC_IDENTITY_TOKEN',
+        'ANTHROPIC_IDENTITY_TOKEN_FILE',
         'OPENAI_API_KEY',
         'OPENAI_BASE_URL',
     ];
@@ -59,8 +65,8 @@ final class ChildEnv
         array $set = [],
         bool $allowSubscriptionOverridingCredentials = false,
     ): ChildEnvResult {
-        $outranking = array_fill_keys(array_map(strtoupper(...), self::OUTRANKING_CREDENTIALS), true);
-        $allowed = array_fill_keys(array_map(strtoupper(...), [...self::BASE_ALLOW, ...$allow]), true);
+        $outranking = array_fill_keys(array_map(self::fold(...), self::OUTRANKING_CREDENTIALS), true);
+        $allowed = array_fill_keys(array_map(self::fold(...), [...self::BASE_ALLOW, ...$allow]), true);
 
         $env = [];
         $withheld = [];
@@ -69,7 +75,7 @@ final class ChildEnv
                 continue;
             }
             $name = (string) $name;
-            $key = strtoupper($name);
+            $key = self::fold($name);
             if (isset($outranking[$key])) {
                 // Refused even when listed in $allow: adding a name to the allow-list must never be how a
                 // subscription user ends up billed per token.
@@ -89,7 +95,7 @@ final class ChildEnv
         foreach ($set as $name => $value) {
             // An explicit home must replace alternate-case inherited spellings on Windows as in the reference.
             foreach (array_keys($env) as $existing) {
-                if (strtoupper((string) $existing) === strtoupper((string) $name)) {
+                if (self::fold((string) $existing) === self::fold((string) $name)) {
                     unset($env[$existing]);
                 }
             }
@@ -97,5 +103,11 @@ final class ChildEnv
         }
 
         return new ChildEnvResult($env, $withheld);
+    }
+
+    /** Every name comparison goes through here: full Unicode upper-casing, as the reference's toUpperCase(). */
+    private static function fold(string $name): string
+    {
+        return mb_strtoupper($name, 'UTF-8');
     }
 }
