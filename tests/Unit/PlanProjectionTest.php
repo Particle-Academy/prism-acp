@@ -14,7 +14,7 @@ use Tests\Support\AcpSchema;
 
 const PLAN_WITH = ['plan' => true];
 const PLAN_WITHOUT = ['plan' => false];
-const PLAN_STATES = ['todo', 'running', 'held', 'waiting_input', 'waiting_condition', 'done', 'failed', 'skipped'];
+const PLAN_STATES = ['todo', 'running', 'held', 'waiting_input', 'waiting_condition', 'proposed', 'done', 'failed', 'skipped'];
 
 /** @param list<array<string, mixed>> $steps */
 function planSnapshot(array $steps, array $extra = []): array
@@ -77,7 +77,7 @@ it('gives every entry the required priority, always medium', function (array $cl
 it('maps each state', function (string $state, string $status): void {
     expect(planEntries(PlanProjection::update(planSnapshot([planStep($state)]), PLAN_WITHOUT))[0]['status'])->toBe($status);
 })->with([
-    ['todo', 'pending'], ['waiting_input', 'pending'], ['waiting_condition', 'pending'], ['running', 'in_progress'],
+    ['todo', 'pending'], ['waiting_input', 'pending'], ['waiting_condition', 'pending'], ['proposed', 'pending'], ['running', 'in_progress'],
     ['held', 'in_progress'], ['done', 'completed'], ['failed', 'pending'], ['skipped', 'pending'],
 ]);
 
@@ -87,6 +87,18 @@ it('shows a failed or skipped step unchecked and labelled, never completed', fun
         ->and($entry['content'])->toBe("[{$state}] Deploy")
         ->and($entry['_meta'][Meta::PLAN_STEP]['state'])->toBe($state);
 })->with(['failed', 'skipped']);
+
+it('shows a step a pending change proposes as pending, with its real state and the change\'s approval in _meta', function (): void {
+    // prism-harness (G-360) sends a change's new steps with state `proposed` while the change waits on the person.
+    // They are not in the plan yet: never in progress, never completed, and no host label.
+    $update = PlanProjection::update(planSnapshot([planStep('done', 'Read'), planStep('proposed', 'Check the totals', ['approvalId' => 'apr_change'])],
+        ['planStatus' => 'waiting', 'holdingApprovalId' => 'apr_change']), PLAN_WITH);
+    $proposed = planEntries($update)[1];
+    expect($proposed['status'])->toBe('pending')
+        ->and($proposed['content'])->toBe('Check the totals')
+        ->and($proposed['_meta'])->toBe([Meta::PLAN_STEP => ['id' => 'ps_proposed', 'state' => 'proposed', 'owner' => 'agent', 'approvalId' => 'apr_change']])
+        ->and(AcpSchema::sessionUpdate($update))->toBe([]);
+});
 
 it('prefixes a person step, after the outcome label', function (): void {
     [$a, $b] = planEntries(PlanProjection::update(planSnapshot([

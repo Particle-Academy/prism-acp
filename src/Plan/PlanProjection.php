@@ -37,8 +37,12 @@ final class PlanProjection
 
     public const UNTITLED = 'Untitled step';
 
+    /**
+     * Each harness state's ACP status. `proposed` is a step a pending change would add (G-360): it is not in the plan
+     * yet, so it is shown pending, never in progress or completed, with the real state in `_meta`.
+     */
     private const STATUS = [
-        'todo' => 'pending', 'waiting_input' => 'pending', 'waiting_condition' => 'pending',
+        'todo' => 'pending', 'waiting_input' => 'pending', 'waiting_condition' => 'pending', 'proposed' => 'pending',
         'running' => 'in_progress', 'held' => 'in_progress', 'done' => 'completed',
         'failed' => 'pending', 'skipped' => 'pending',
     ];
