@@ -13,6 +13,7 @@ use Prism\Acp\Codex\CodexTransportHandlers;
 use Prism\Acp\Codex\CodexTransportOptions;
 use Prism\Acp\Credentials\ProviderCredentials;
 use Prism\Acp\Mcp\McpServers;
+use Prism\Acp\Meta;
 use Prism\Acp\Ndjson\Json;
 use Prism\Acp\Support\Js;
 use Tests\Support\AcpSchema;
@@ -188,7 +189,8 @@ function codexPlanScenario(array $frames): stdClass
 function codexPlanUpdates(array $frames): array
 {
     $updates = [];
-    foreach (runCodexScenario(codexPlanScenario($frames))['events'] as $event) {
+    // As the wire carries them, as PHP arrays.
+    foreach (json_decode(Json::encode(runCodexScenario(codexPlanScenario($frames))['events']), true) as $event) {
         if ($event['type'] === 'update') {
             $updates[] = $event['value'];
         }
@@ -210,7 +212,7 @@ it('sends every Codex plan entry with the priority the schema requires (G-362)',
 
 it('never sends plan_update for a Codex plan delta, and says it did not map it (G-362)', function (): void {
     $updates = codexPlanUpdates([['turn/plan/delta', (object) ['turnId' => 'turn-fixture', 'delta' => 'progress']]]);
-    $unmapped = array_filter($updates, fn (array $update) => ($update['_meta'][\Prism\Acp\Meta::UNMAPPED_FRAME]['reason'] ?? null) === G362Oracle::DELTA_REASON);
+    $unmapped = array_filter($updates, fn (array $update) => ($update['_meta'][Meta::UNMAPPED_FRAME]['reason'] ?? null) === G362Oracle::DELTA_REASON);
     expect(array_filter($updates, fn (array $update) => $update['sessionUpdate'] === 'plan_update' || array_key_exists('delta', $update)))->toBe([])
         ->and($unmapped)->toHaveCount(1);
 });

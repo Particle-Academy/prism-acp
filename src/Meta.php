@@ -58,6 +58,12 @@ final class Meta
 
     public const MODEL_INFO = self::NS.'/model_info';
 
+    /** On a plan update: `{planId, revision, planStatus, holdingApprovalId}`. See Plan\PlanProjection. */
+    public const PLAN = self::NS.'/plan';
+
+    /** On each plan entry: `{id, state, owner, approvalId}`, the step's real state. See Plan\PlanProjection. */
+    public const PLAN_STEP = self::NS.'/plan_step';
+
     /** A namespaced key; a bare name only, never one of ACP's reserved trace keys. */
     public static function key(string $name): string
     {

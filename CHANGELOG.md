@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Codex plan entries now carry the `priority` field ACP requires. Before, a client built from the ACP schema dropped every Codex plan entry (G-362).
+- Codex `turn/plan/delta` is no longer sent as `plan_update` with a `delta` field, which is not an ACP shape. It is reported as an unmapped frame. Codex sends its plan whole, through `turn/plan/updated` (G-362).
+
+### Added
+
+- `Plan\PlanProjection` turns a plan snapshot into `plan`, or into `plan_update` for a client that advertised `clientCapabilities.plan`. Failed and skipped steps are shown unchecked and labelled `[failed]` or `[skipped]`, never `completed`. Each step's real state is in `_meta["particle.academy/plan_step"]` (G-360).
+- A driver's options now include `clientCapabilities: {plan: bool}`, read from the client's `initialize`.
+- `AcpAgent` checks every plan update a driver sends. It never sends `plan_update` or `plan_removed` to a client that did not advertise `plan`; an items `plan_update` is sent as `plan` instead, and anything else is dropped and reported. An entry without a valid priority is sent as `medium`, and that is reported.
+
 ## 0.1.2
 
 ### Security

@@ -101,7 +101,8 @@ final class AcpSchema
                 'required' => self::required($argument, $value, $path, $errors),
                 'additionalProperties' => self::additional($schema, $argument, $value, $path, $errors),
                 'items' => self::items($argument, $value, $path, $errors),
-                'allOf' => array_map(fn (mixed $sub) => self::check($sub, $value, $path, $errors), $argument),
+                // Not array_map with an arrow function: that would capture $errors by value and lose every error.
+                'allOf' => self::allOf($argument, $value, $path, $errors),
                 'anyOf', 'oneOf' => self::alternatives($keyword, $argument, $value, $path, $errors),
                 'not' => self::not($argument, $value, $path, $errors),
                 'const' => self::same($argument, $value) ? null : ($errors[] = ($path ?: '/').' must be '.Json::encode($argument)),
@@ -220,6 +221,17 @@ final class AcpSchema
         }
         if ($keyword === 'oneOf' ? $matched !== 1 : $matched === 0) {
             $errors[] = ($path ?: '/')." matched {$matched} of the ".count($alternatives).' alternatives';
+        }
+    }
+
+    /**
+     * @param  list<mixed>  $schemas
+     * @param  list<string>  $errors
+     */
+    private static function allOf(array $schemas, mixed $value, string $path, array &$errors): void
+    {
+        foreach ($schemas as $schema) {
+            self::check($schema, $value, $path, $errors);
         }
     }
 
