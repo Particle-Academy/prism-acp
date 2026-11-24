@@ -9,6 +9,7 @@
 
 ### Added
 
+- `Plan\PlanProjection` shows a `proposed` step, one a pending change would add, as `pending` with its real state in `_meta`. Before, it refused the whole plan while a change waited on the person (G-360).
 - `Plan\PlanProjection` turns a plan snapshot into `plan`, or into `plan_update` for a client that advertised `clientCapabilities.plan`. Failed and skipped steps are shown unchecked and labelled `[failed]` or `[skipped]`, never `completed`. Each step's real state is in `_meta["particle.academy/plan_step"]` (G-360).
 - A driver's options now include `clientCapabilities: {plan: bool}`, read from the client's `initialize`.
 - `AcpAgent` checks every plan update a driver sends. It never sends `plan_update` or `plan_removed` to a client that did not advertise `plan`; an items `plan_update` is sent as `plan` instead, and anything else is dropped and reported. An entry without a valid priority is sent as `medium`, and that is reported.
