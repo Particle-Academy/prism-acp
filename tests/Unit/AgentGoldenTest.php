@@ -11,6 +11,7 @@ use Prism\Acp\JsonRpc\JsonRpcPeer;
 use Prism\Acp\Ndjson\Json;
 use Prism\Acp\TurnFailure;
 use Tests\Support\FakeDriver;
+use Tests\Support\G362Oracle;
 
 require_once dirname(__DIR__).'/Support/FakeDriver.php';
 
@@ -124,7 +125,7 @@ it('runs every scenario', function () use ($scenarios, $expected) {
 
 foreach ($scenarios as $i => $scenario) {
     it("behaves as the reference: {$scenario->name}", function () use ($scenario, $expected, $i) {
-        $want = array_map(fn (mixed $entry): string => Json::encode($entry), $expected[$i]->log);
+        $want = array_map(fn (mixed $entry): string => Json::encode(G362Oracle::agentEntry($entry)), $expected[$i]->log);
         $got = runScenario($scenario);
         foreach ($want as $n => $line) {
             expect($got[$n] ?? '(nothing)')->toBe($line, "entry {$n} differs");

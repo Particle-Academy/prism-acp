@@ -7,6 +7,7 @@ namespace Prism\Acp\Codex;
 use Prism\Acp\Agent\TurnOutcome;
 use Prism\Acp\Meta;
 use Prism\Acp\Ndjson\Json;
+use Prism\Acp\Plan\PlanProjection;
 use Prism\Acp\SessionId;
 use Prism\Acp\Support\Js;
 use Prism\Acp\Text;
@@ -234,7 +235,11 @@ trait CodexNotifications
             case 'turn/plan/updated': $this->emitPlan(Js::get($object, 'plan'), 'plan');
 
                 return;
-            case 'turn/plan/delta': $this->emit(['sessionUpdate' => 'plan_update', 'delta' => Js::get($object, 'delta') ?? $object]);
+            case 'turn/plan/delta':
+                // Not forwarded (G-362). ACP's plan_update replaces a whole plan by id and may go only to a client that
+                // advertised plan updates; a delta fits neither. Codex 0.163.0 sends its plan whole, through
+                // turn/plan/updated.
+                $this->unmapped('turn/plan/delta is not a plan snapshot', $object);
 
                 return;
             case 'thread/tokenUsage/updated': $this->emitUsage(Js::get($object, 'tokenUsage'));
@@ -326,7 +331,9 @@ trait CodexNotifications
             if (! in_array($status, ['completed', 'inProgress', 'pending'], true)) {
                 $this->unmapped('turn/plan/updated entry had an unknown status', $entry);
             }
+            // priority is required by ACP (G-362): a client built from the schema drops an entry without one.
             $entries[] = ['content' => Js::string($entry, 'step') ?? Js::string($entry, 'title') ?? 'Step '.($index + 1),
+                'priority' => PlanProjection::PRIORITY,
                 'status' => $status === 'completed' ? 'completed' : ($status === 'inProgress' ? 'in_progress' : 'pending')];
         }
         $this->emit(['sessionUpdate' => $sessionUpdate, 'entries' => $entries]);
