@@ -123,9 +123,10 @@ it('gives a plan entry with no valid priority the neutral one', function (mixed 
     $session = planGateSession($capabilities);
     planGateEmit($session, ['sessionUpdate' => 'plan', 'entries' => [
         ['content' => 'a', 'status' => 'pending'], ['content' => 'b', 'priority' => 'urgent', 'status' => 'completed'], ['content' => 'c', 'priority' => 'high', 'status' => 'pending'],
+        (object) ['content' => 'd', 'status' => 'pending'],
     ]]);
     $updates = planGateUpdates($session);
-    expect(array_map(fn ($e) => $e->priority, $updates[0]->update->entries))->toBe(['medium', 'medium', 'high'])
+    expect(array_map(fn ($e) => $e->priority, $updates[0]->update->entries))->toBe(['medium', 'medium', 'high', 'medium'])
         ->and(AcpSchema::sessionNotification($updates[0]))->toBe([])
         ->and($session['problems'])->toHaveCount(1);
 })->with([[(object) ['plan' => new stdClass]], [new stdClass]]);

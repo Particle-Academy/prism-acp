@@ -510,8 +510,9 @@ final class AcpAgent
     {
         $fixed = 0;
         foreach ($entries as $index => $entry) {
-            if (is_array($entry) && ! in_array($entry['priority'] ?? null, self::PRIORITIES, true)) {
-                $entries[$index] = [...$entry, 'priority' => PlanProjection::PRIORITY];
+            $fields = $entry instanceof \stdClass ? get_object_vars($entry) : $entry;
+            if (is_array($fields) && ! in_array($fields['priority'] ?? null, self::PRIORITIES, true)) {
+                $entries[$index] = [...$fields, 'priority' => PlanProjection::PRIORITY];
                 $fixed++;
             }
         }
