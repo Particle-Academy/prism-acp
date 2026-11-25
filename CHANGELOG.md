@@ -1,6 +1,22 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+### Security
+
+- `AcpAgent` caps every plan update a driver sends, as the TypeScript reference does: 256 entries (counted on the list before any entry is read), 1024 code points per entry `content`, 16384 bytes of JSON per `_meta`, 65536 code points of markdown, a 4096 `path` and a 256 `planId`. Each refusal is reported through `onProtocolError` (G-376).
+- The plan gate refuses control characters, matching the TypeScript reference: a `planId` or markdown `path` with a control, format or invisible character, and markdown `content` with a control or bidi character or a bare CR. Text that is not valid UTF-8 is refused. The sets are spelled out in `Support\HiddenCharacters` and checked on every code point against the reference's own (G-377).
+- Plan updates are sent as built from their checked fields. A `_meta` is sent as it serialized when it was checked. Every other update is sent as its serialization read back. A read or serialization that throws refuses the update and is reported, and nothing is thrown into the driver (G-376).
+- The turn failure a client receives on `session/prompt` is rebuilt from its documented fields (`TurnFailure::wire`). The kind is one of the five or `other`, a reset is sent only when it is a JavaScript date (rounded up), and the reason is marked and bounded as provider text (`Support\ProviderText`) (G-372).
+- Claude launches pass exactly one `--settings` value, with `disableRemoteControl: true`. Claude and Codex refuse the `binaryArgs` the reference refuses, with `RemoteControlRefused`, before any process starts. Every Codex frame passes a `remoteControl/*` check before it is written.
+- Codex transports refuse list frames. A frame is serialized once, and the bytes that were checked are the bytes written.
+- `ChildEnv` withholds the reference's full credential list, and compares names with the reference's Unicode case mapping.
+
+### Breaking changes
+
+- A host that passes its own `--settings`, or another argument the reference refuses, through `binaryArgs` must stop doing so.
+- An embedder that sends list frames to a Codex transport must send single frames.
+- Plan entries carry only `content`, `priority`, `status` and `_meta`, and plan updates only their documented fields. A plan update over a cap, or holding the characters above, is refused and reported. A non-plan update without a string `sessionUpdate`, or one that cannot be serialized, is refused and reported. Drivers that send ACP-shaped plans within the caps are unaffected.
 
 ### Fixed
 
