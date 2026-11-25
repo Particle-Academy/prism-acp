@@ -22,6 +22,15 @@ final class ProviderText
 
     public static function bound(string $value, int $max = self::MAX): string
     {
+        // Only a prefix can reach the result: marking never shortens a character, so the first $max code units come
+        // from at most the first $max characters, and one more says the text was cut. A character, or a malformed
+        // sequence read as one U+FFFD, is at most four bytes and is decided by at most three bytes after it, so
+        // 4 * ($max + 2) bytes decode those characters exactly as the whole text does. Provider text of any size is
+        // therefore bounded in work and memory proportional to $max.
+        $prefix = 4 * (max($max, 0) + 2);
+        if (strlen($value) > $prefix) {
+            $value = substr($value, 0, $prefix);
+        }
         $marked = (string) preg_replace_callback(
             HiddenCharacters::PROVIDER,
             static fn (array $match): string => sprintf('<U+%04X>', mb_ord($match[0], 'UTF-8')),
