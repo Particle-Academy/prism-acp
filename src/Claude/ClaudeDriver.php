@@ -800,6 +800,11 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
     private function retryCleanup(Deferred $done, float $deadline): void
     {
         try {
+            // Read BEFORE this attempt's removal as well as after it. The last handle to a delete-pending file can
+            // close between the failed rmdir and the read after it (G-379, main CI on Windows), which leaves an empty
+            // directory that the next attempt removes. Empty is retryable only when known entries were pending just
+            // before; an empty directory whose rmdir failed for any other reason keeps its single post-stop retry.
+            $pendingBefore = $this->approvalDeletionState() === 'pending';
             $this->removeMcpConfig(false);
             $this->removeApprovals(false);
             if ($this->mcpConfigDirectory === null && $this->approvalDirectory === null) {
@@ -807,7 +812,8 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
 
                 return;
             }
-            if (microtime(true) < $deadline && $this->pendingApprovalDeletion()) {
+            $after = $this->approvalDeletionState();
+            if (microtime(true) < $deadline && ($after === 'pending' || ($pendingBefore && $after === 'empty'))) {
                 $this->loop->delay(min(0.05, max(0.0, $deadline - microtime(true))), fn () => $this->retryCleanup($done, $deadline));
 
                 return;
@@ -825,25 +831,26 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
     }
 
     /**
-     * A narrow metadata signature; never delete unknown entries or follow links. True while the only entries left are
-     * this driver's own known files in delete-pending state, AND when no entry is left at all: the last handle to a
-     * delete-pending file can close between the failed rmdir and this read (G-379, main CI on Windows), and the
-     * directory is then removable on the next attempt. Anything else present ends the retry at once.
+     * A narrow metadata signature; never delete unknown entries or follow links. 'pending' when the only entries left
+     * are this driver's own known files in delete-pending state, 'empty' when no entry is left, null for anything else.
+     *
+     * @return 'pending'|'empty'|null
      */
-    private function pendingApprovalDeletion(): bool
+    private function approvalDeletionState(): ?string
     {
         $directory = $this->approvalDirectory;
         if (PHP_OS_FAMILY !== 'Windows' || $this->mcpConfigDirectory !== null || $directory === null) {
-            return false;
+            return null;
         }
         clearstatcache(true, $directory);
         if (is_link($directory)) {
-            return false;
+            return null;
         }
         $entries = @opendir($directory);
         if ($entries === false) {
-            return false;
+            return null;
         }
+        $state = 'empty';
         try {
             while (($name = readdir($entries)) !== false) {
                 if ($name === '.' || $name === '..') {
@@ -851,19 +858,19 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
                 }
                 $path = $directory.DIRECTORY_SEPARATOR.$name;
                 if (! in_array($name, ['approve.php', 'settings.json'], true) || ! in_array($path, $this->approvalFiles, true)) {
-                    return false;
+                    return null;
                 }
                 clearstatcache(true, $path);
                 if (is_link($path) || @lstat($path) !== false) {
-                    return false;
+                    return null;
                 }
+                $state = 'pending';
             }
         } finally {
             closedir($entries);
         }
 
-        // Only known delete-pending entries, or none left at all: an owned directory left empty is retryable.
-        return true;
+        return $state;
     }
 
     private function removeMcpConfig(bool $reportFailure = true): void
