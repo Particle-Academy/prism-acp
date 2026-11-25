@@ -20,6 +20,7 @@
 
 ### Fixed
 
+- On Windows, stopping a Claude driver no longer reports a failure to remove its permission-prompt directory when the last handle to a delete-pending approval file closes between the failed directory removal and the driver's check. The empty directory is retried within the same three-second bound (G-379).
 - Codex plan entries now carry the `priority` field ACP requires. Before, a client built from the ACP schema dropped every Codex plan entry (G-362).
 - Codex `turn/plan/delta` is no longer sent as `plan_update` with a `delta` field, which is not an ACP shape. It is reported as an unmapped frame. Codex sends its plan whole, through `turn/plan/updated` (G-362).
 
