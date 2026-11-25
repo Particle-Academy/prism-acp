@@ -54,10 +54,21 @@ it('bounds pending known approval-file cleanup without blocking the event loop',
             $loop->delay(0.5, fn () => $holder->closeInput());
         }
         $expectedRemovalWarnings = 0;
-        set_error_handler(function (int $severity, string $message, string $file, int $line) use ($directory, $files, &$expectedRemovalWarnings): bool {
+        set_error_handler(function (int $severity, string $message, string $file, int $line) use ($directory, $files, $fault, $holder, &$expectedRemovalWarnings): bool {
             if ($severity === E_WARNING && $file === dirname(__DIR__, 2).DIRECTORY_SEPARATOR.'src'.DIRECTORY_SEPARATOR.'Support'.DIRECTORY_SEPARATOR.'PrivateDirectory.php'
                 && str_starts_with($message, 'rmdir('.$directory.'):') && str_contains($message, 'Directory not empty')) {
                 $expectedRemovalWarnings++;
+                if ($fault === 'released' && $expectedRemovalWarnings === 2) {
+                    // G-379, made deterministic: the holder lets go AFTER the retry's rmdir failed and BEFORE the driver
+                    // reads the directory, which is the window main CI hit when the transient holder closed at 0.5 s.
+                    $holder->closeInput();
+                    $released = microtime(true) + 5;
+                    while (($holder->isOpen() || scandir($directory) !== ['.', '..']) && microtime(true) < $released) {
+                        $holder->read(0.02);
+                        clearstatcache(true, $directory);
+                    }
+                    expect(scandir($directory))->toBe(['.', '..']);
+                }
 
                 return true; // This real OS failure is the controlled condition; every other warning remains an error.
             }
@@ -78,13 +89,16 @@ it('bounds pending known approval-file cleanup without blocking the event loop',
         expect($verdict->toArray())->toBe(['graceful' => true, 'empty' => true, 'survivors' => 0, 'verified' => true])
             ->and($second->toArray())->toBe($verdict->toArray())->and($expectedRemovalWarnings)->toBeGreaterThan(0);
         echo json_encode(['ownedPendingCleanup' => ['fault' => $fault, 'elapsedSeconds' => $elapsed, 'heartbeat' => $heartbeat, 'directoryGone' => ! is_dir($directory)]], JSON_THROW_ON_ERROR)."\n";
-        if ($fault === 'transient') {
+        if ($fault === 'transient' || $fault === 'released') {
             // The driver's verdict first: no reported problem means its own removal succeeded inside the bound. Read
             // the directory after that, for up to a second: a directory removed while another process (an indexer or a
             // scanner) holds a handle to it stays in its parent until that handle closes. One still present after the
             // wait, or a reported problem, is a real failure. main CI (Windows, PHP 8.5, 2026-11-24) once saw the
             // directory present here, and the old assertion order could not say which of the two it was.
-            expect($problems)->toBe([])->and($elapsed)->toBeGreaterThanOrEqual(0.45)->toBeLessThan(3.0)->and($heartbeat)->toBe(1);
+            expect($problems)->toBe([])->and($elapsed)->toBeLessThan(3.0);
+            if ($fault === 'transient') {
+                expect($elapsed)->toBeGreaterThanOrEqual(0.45)->and($heartbeat)->toBe(1);
+            }
             $settled = microtime(true) + 1.0;
             while (is_dir($directory) && microtime(true) < $settled) {
                 usleep(20_000);
@@ -117,4 +131,4 @@ it('bounds pending known approval-file cleanup without blocking the event loop',
         clearstatcache();
         expect(PrivateDirectory::remove($directory, ...[...$files, $unknown]))->toBeTrue();
     }
-})->with(['transient', 'persistent', 'unknown']);
+})->with(['transient', 'released', 'persistent', 'unknown']);

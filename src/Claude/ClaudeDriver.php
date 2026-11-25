@@ -824,7 +824,12 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         }
     }
 
-    /** A narrow metadata signature; never delete unknown entries or follow links. */
+    /**
+     * A narrow metadata signature; never delete unknown entries or follow links. True while the only entries left are
+     * this driver's own known files in delete-pending state, AND when no entry is left at all: the last handle to a
+     * delete-pending file can close between the failed rmdir and this read (G-379, main CI on Windows), and the
+     * directory is then removable on the next attempt. Anything else present ends the retry at once.
+     */
     private function pendingApprovalDeletion(): bool
     {
         $directory = $this->approvalDirectory;
@@ -839,7 +844,8 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         if ($entries === false) {
             return false;
         }
-        $pending = false;
+        // An owned directory left empty is retryable: its rmdir failed while a known entry was still pending.
+        $pending = true;
         try {
             while (($name = readdir($entries)) !== false) {
                 if ($name === '.' || $name === '..') {
@@ -853,7 +859,6 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
                 if (is_link($path) || @lstat($path) !== false) {
                     return false;
                 }
-                $pending = true;
             }
         } finally {
             closedir($entries);
