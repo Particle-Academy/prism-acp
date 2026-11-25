@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        attempt: [1, 2, 3, 4, 5]
+        attempt: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -23,5 +23,10 @@ jobs:
           coverage: none
           tools: composer:v2
       - run: composer update --prefer-dist --no-interaction --no-progress
-      - run: vendor/bin/pest tests/Diagnostic/G383DiagnosticTest.php
-      - run: for i in 1 2 3 4 5 6 7 8 9 10; do vendor/bin/pest tests/Unit/CredentialDescendantProtectionTest.php --filter 'descendant symlink' || echo "ORIGINAL_FAILED $i"; done
+      - name: matrix
+        run: |
+          for mutant in 0 1; do
+            G383_MUTANT=$mutant vendor/bin/pest tests/Unit/CredentialDescendantProtectionTest.php --filter 'descendant symlink' >/dev/null 2>&1; echo "RESULT new-test mutant=$mutant exit=$?"
+            G383_MUTANT=$mutant vendor/bin/pest tests/Diagnostic/OriginalSymlinkTest.php --filter 'ORIGINAL' >/dev/null 2>&1; echo "RESULT old-test mutant=$mutant exit=$?"
+          done
+          G383_MUTANT=1 vendor/bin/pest tests/Unit/CredentialDescendantProtectionTest.php --filter 'descendant symlink' 2>&1 | grep -iE "atime|Failed asserting" | head -5 || true
