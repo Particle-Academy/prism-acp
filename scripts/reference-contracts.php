@@ -23,9 +23,13 @@ use Prism\Acp\Async\Loop;
 use Prism\Acp\Claude\Approvals;
 use Prism\Acp\Claude\ClaudeDriver;
 use Prism\Acp\Claude\ClaudeDriverOptions;
+use Prism\Acp\Claude\ClaudeRateLimit;
 use Prism\Acp\Claude\ClaudeToAcp;
+use Prism\Acp\Claude\ClaudeTurnFailures;
+use Prism\Acp\Claude\RemoteControlRefused;
 use Prism\Acp\Codex\CodexDriver;
 use Prism\Acp\Codex\CodexDriverOptions;
+use Prism\Acp\Codex\CodexRateLimit;
 use Prism\Acp\Codex\CodexRemoteControl;
 use Prism\Acp\Codex\CodexTransport;
 use Prism\Acp\Codex\CodexTransportHandlers;
@@ -35,6 +39,7 @@ use Prism\Acp\JsonRpc\JsonRpcPeer;
 use Prism\Acp\Meta;
 use Prism\Acp\Ndjson\Json;
 use Prism\Acp\Ndjson\ReferenceFramingProbe;
+use Prism\Acp\Plan\PlanProjection;
 use Prism\Acp\Process\ProcessTree;
 use Prism\Acp\Process\Provider;
 use Prism\Acp\Process\StopVerdict;
@@ -313,6 +318,132 @@ function claudeLaunchSettingsForced(): bool
     return false;
 }
 
+/** Claude Code 2.1.332's end of a 529 (0.48.0): `server_error` with the status and API error type beside it. */
+function claudeOverloadedKind(): bool
+{
+    $failures = new ClaudeTurnFailures;
+    $failures->observe(Json::decode('{"type":"assistant","parent_tool_use_id":null,"error":"server_error","api_error_status":529,"api_error_type":"overloaded_error"}'));
+
+    return $failures->take()?->kind === 'overloaded';
+}
+
+/** codex-cli 0.163.0's HTTP-carrying failure variants (0.48.0): 529 is overloaded, 429 is a rate limit. */
+function codexStatusKind(): bool
+{
+    $overloaded = TurnFailure::fromCodex(Json::decode('{"codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":529}}}'));
+    $limited = TurnFailure::fromCodex(Json::decode('{"codexErrorInfo":{"responseTooManyFailedAttempts":{"httpStatusCode":429}}}'));
+
+    return $overloaded?->kind === 'overloaded' && $limited?->kind === 'rate_limit';
+}
+
+/** The wire form of a failure keeps only documented values (0.48.0): an unknown kind is `other`, a reset is a JS date. */
+function turnFailureWireBounded(): bool
+{
+    $wire = Json::decode(Json::encode(new TurnFailure('owned_inventory', 'owned-unknown-kind', 8_640_000_000_001_000)));
+
+    return $wire->kind === 'other' && ! property_exists($wire, 'resetsAtMs');
+}
+
+/** A Codex reading with only a secondary window, and one whose secondary is the more spent (0.48.0). */
+function codexRateLimitWindowsRead(): bool
+{
+    $secondaryOnly = CodexRateLimit::read(Json::decode('{"rateLimits":{"secondary":{"usedPercent":91,"windowDurationMins":10080,"resetsAt":1800000000}}}'));
+    $both = CodexRateLimit::read(Json::decode('{"rateLimits":{"primary":{"usedPercent":7,"windowDurationMins":300,"resetsAt":1800000000},"secondary":{"usedPercent":92,"windowDurationMins":10080,"resetsAt":1800000000}}}'));
+
+    return $secondaryOnly instanceof CodexRateLimit && str_contains($secondaryOnly->notice(), '91%')
+        && $both instanceof CodexRateLimit && str_contains($both->notice(), '92%');
+}
+
+/** A Claude rejection that carries no unifiedWindows is still a reading (0.48.0). */
+function claudeRejectionRead(): bool
+{
+    return ClaudeRateLimit::read(Json::decode('{"status":"rejected","rateLimitType":"five_hour","resetsAt":1800000000}')) instanceof ClaudeRateLimit;
+}
+
+/** The provider's window name is bounded and marked before it reaches the notice (0.48.0). */
+function claudeNoticeWindowNameBounded(): bool
+{
+    $name = 'owned'.chr(27).'[31m'.str_repeat('w', 200);
+    $read = ClaudeRateLimit::read(Json::decode(Json::encode(['status' => 'allowed', 'rateLimitType' => $name, 'resetsAt' => 1800000000, 'unifiedWindows' => new stdClass])));
+    if (! $read instanceof ClaudeRateLimit) {
+        throw new RuntimeException('Inventory window-name probe was not read');
+    }
+    $notice = $read->notice();
+
+    return ! str_contains($notice, chr(27)) && ! str_contains($notice, str_repeat('w', 200));
+}
+
+/** Pass one update through AcpAgent's real plan gate, for a client that advertised plan updates. */
+function planGateOf(array $update): ?array
+{
+    $loop = new Loop;
+    $peer = new JsonRpcPeer(static function (): void {}, loop: $loop);
+    $agent = new AcpAgent($peer, static function (): never {
+        throw new RuntimeException('Inventory plan gate unexpectedly requested a provider');
+    }, loop: $loop);
+    (new ReflectionProperty(AcpAgent::class, 'clientAcceptsPlan'))->setValue($agent, true);
+
+    return (new ReflectionMethod(AcpAgent::class, 'planGate'))->invoke($agent, 'owned-inventory', $update);
+}
+
+function planGateSends(array $update): bool
+{
+    return planGateOf($update) !== null;
+}
+
+/** 0.48.0 caps: more than 256 entries, or an entry over 1024 code points, refuses the whole update. */
+function planGateCapped(): bool
+{
+    $entry = ['content' => 'owned', 'priority' => 'medium', 'status' => 'pending'];
+    if (! planGateSends(['sessionUpdate' => 'plan', 'entries' => [$entry]])) {
+        throw new RuntimeException('Inventory plan gate refused an ordinary plan');
+    }
+
+    return ! planGateSends(['sessionUpdate' => 'plan', 'entries' => array_fill(0, 257, $entry)])
+        && ! planGateSends(['sessionUpdate' => 'plan', 'entries' => [[...$entry, 'content' => str_repeat('a', 1025)]]]);
+}
+
+/** 0.48.0 refusals: a planId holding a hidden character, and markdown content holding a control character. */
+function planGateRefusesHidden(): bool
+{
+    return ! planGateSends(['sessionUpdate' => 'plan_update', 'plan' => ['type' => 'items', 'planId' => 'owned'.mb_chr(0x202E, 'UTF-8').'plan', 'entries' => []]])
+        && ! planGateSends(['sessionUpdate' => 'plan_update', 'plan' => ['type' => 'markdown', 'planId' => 'owned-plan', 'content' => 'owned'.chr(7)]]);
+}
+
+/** G-342 (0.48.0): a list frame and a JsonSerializable remoteControl frame are refused; an ordinary frame passes. */
+function codexListFrameRefused(): bool
+{
+    if (CodexRemoteControl::encodedFrame(['jsonrpc' => '2.0', 'id' => 1, 'method' => 'thread/start']) === '') {
+        return false;
+    }
+    foreach ([
+        [['jsonrpc' => '2.0', 'id' => 1, 'method' => 'thread/start']],
+        new class implements JsonSerializable
+        {
+            public function jsonSerialize(): mixed
+            {
+                return ['jsonrpc' => '2.0', 'id' => 1, 'method' => 'remoteControl/enable'];
+            }
+        },
+    ] as $frame) {
+        try {
+            CodexRemoteControl::encodedFrame($frame);
+
+            return false;
+        } catch (RemoteControlRefused) {
+        }
+    }
+
+    return true;
+}
+
+/** G-362 (0.48.0): a projected entry carries priority, and the gate gives a driver's entry without one `medium`. */
+function planEntryPriorityPresent(): bool
+{
+    return PlanProjection::entry(['id' => 'owned-step', 'title' => 'Owned', 'state' => 'todo'])['priority'] === 'medium'
+        && (planGateOf(['sessionUpdate' => 'plan', 'entries' => [['content' => 'owned', 'status' => 'pending']]])['entries'][0]['priority'] ?? null) === 'medium';
+}
+
 $metaConstants = (new ReflectionClass(Meta::class))->getConstants();
 echo json_encode([
     'readRateLimits' => publicMethod(CodexDriver::class, 'readRateLimits'),
@@ -351,4 +482,19 @@ echo json_encode([
     'claudeSharedSessions' => sourceMentions('sharedSessions'),
     'claudeLaunchSettings' => claudeLaunchSettingsForced(),
     'claudeBrowserSignIn' => class_exists('Prism\\Acp\\Claude\\ClaudeLoginError') || sourceMentions('auth login'),
+    'claudeOverloadedKind' => claudeOverloadedKind(),
+    'codexStatusKind' => codexStatusKind(),
+    'turnFailureRetry' => property_exists(TurnFailure::class, 'retryable') || property_exists(TurnFailure::class, 'retryAfterMs') || property_exists(TurnFailure::class, 'resumable'),
+    'sessionExitedCode' => sourceMentions('session_exited'),
+    'turnFailureWireBounds' => turnFailureWireBounded() || sourceMentions('wireTurnFailure'),
+    'rateLimitReading' => in_array('particle.academy/rate_limit_reading', $metaConstants, true) || sourceMentions('rate_limit_reading'),
+    'codexRateLimitWindows' => codexRateLimitWindowsRead(),
+    'claudeRateLimitRejected' => claudeRejectionRead(),
+    'claudeNoticeWindowName' => claudeNoticeWindowNameBounded(),
+    'planTitlePrefix' => str_starts_with(PlanProjection::title('Draft the owned plan'), 'Step: '),
+    'planGateCaps' => planGateCapped(),
+    'planHiddenCharRefusal' => planGateRefusesHidden(),
+    'externalDriverContract' => sourceMentions('ALLOW_ONCE_OR_DENY', 'askPermission', 'isRetryableKind', 'MAX_RETRY_AFTER_MS'),
+    'codexListFrameGuard' => codexListFrameRefused(),
+    'planEntryPriority' => planEntryPriorityPresent(),
 ], JSON_THROW_ON_ERROR)."\n";

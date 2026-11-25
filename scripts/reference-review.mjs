@@ -19,6 +19,10 @@ export const contracts = Object.freeze({
   claudeAccountSelection: '0.45.0', childEnvCredentialList: '0.45.0',
   claudeSharedSessions: '0.46.0', claudeLaunchSettings: '0.46.0',
   claudeBrowserSignIn: '0.47.0',
+  claudeOverloadedKind: '0.48.0', codexStatusKind: '0.48.0', turnFailureRetry: '0.48.0', sessionExitedCode: '0.48.0',
+  turnFailureWireBounds: '0.48.0', rateLimitReading: '0.48.0', codexRateLimitWindows: '0.48.0',
+  claudeRateLimitRejected: '0.48.0', claudeNoticeWindowName: '0.48.0', planTitlePrefix: '0.48.0', planGateCaps: '0.48.0',
+  planHiddenCharRefusal: '0.48.0', externalDriverContract: '0.48.0', codexListFrameGuard: '0.48.0', planEntryPriority: '0.48.0',
 });
 
 // Assigned gaps are reviewed alongside release provenance; any numbered placeholder is insufficient.
@@ -34,6 +38,10 @@ const contractGaps = Object.freeze({
   codexFailureProviderMessage: 'G-329', claudeMessageId: 'G-330', claudeUnsolicitedTurn: 'G-331', driverLiveness: 'G-332',
   claudeAccountSelection: 'G-333', childEnvCredentialList: 'G-334', claudeSharedSessions: 'G-335',
   claudeLaunchSettings: 'G-336', claudeBrowserSignIn: 'G-337',
+  claudeOverloadedKind: 'G-367', codexStatusKind: 'G-367', turnFailureRetry: 'G-367', sessionExitedCode: 'G-367',
+  turnFailureWireBounds: 'G-372', rateLimitReading: 'G-373', codexRateLimitWindows: 'G-374', claudeRateLimitRejected: 'G-374',
+  claudeNoticeWindowName: 'G-374', planTitlePrefix: 'G-375', planGateCaps: 'G-376', planHiddenCharRefusal: 'G-377',
+  externalDriverContract: 'G-378', codexListFrameGuard: 'G-342', planEntryPriority: 'G-362',
 });
 
 function core(version) {

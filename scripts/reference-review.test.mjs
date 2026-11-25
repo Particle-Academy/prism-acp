@@ -3,8 +3,8 @@ import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import {contracts, reviewReference} from './reference-review.mjs';
 const review = JSON.parse(readFileSync(new URL('./reference-review.json', import.meta.url)));
-const metadata = {'dist-tags': {latest: '0.47.0'}, versions: {'0.25.1': {}, '0.32.0': {}, '0.33.0': {}, '0.33.2': {}, '0.34.0': {}, '0.35.0': {}, '0.36.0': {}, '0.36.1': {}, '0.37.0': {},
-  '0.38.0': {}, '0.39.0': {}, '0.40.0': {}, '0.41.0': {}, '0.41.1': {}, '0.41.2': {}, '0.42.0': {}, '0.43.0': {}, '0.44.0': {}, '0.45.0': {}, '0.46.0': {}, '0.47.0': {}}};
+const metadata = {'dist-tags': {latest: '0.48.0'}, versions: {'0.25.1': {}, '0.32.0': {}, '0.33.0': {}, '0.33.2': {}, '0.34.0': {}, '0.35.0': {}, '0.36.0': {}, '0.36.1': {}, '0.37.0': {},
+  '0.38.0': {}, '0.39.0': {}, '0.40.0': {}, '0.41.0': {}, '0.41.1': {}, '0.41.2': {}, '0.42.0': {}, '0.43.0': {}, '0.44.0': {}, '0.45.0': {}, '0.46.0': {}, '0.47.0': {}, '0.48.0': {}}};
 // Independent main-source observations: do not derive truth from the missing list under test.
 const observed = {
   readRateLimits: false, mcpServerStatus: false, appContainerLocal: false, nativeTools: false,
@@ -19,13 +19,17 @@ const observed = {
   codexFailureProviderMessage: false, claudeMessageId: false, claudeUnsolicitedTurn: false, driverLiveness: false,
   claudeAccountSelection: false, childEnvCredentialList: true, claudeSharedSessions: false,
   claudeLaunchSettings: true, claudeBrowserSignIn: false,
+  claudeOverloadedKind: false, codexStatusKind: false, turnFailureRetry: false, sessionExitedCode: false,
+  turnFailureWireBounds: false, rateLimitReading: false, codexRateLimitWindows: false, claudeRateLimitRejected: false,
+  claudeNoticeWindowName: false, planTitlePrefix: false, planGateCaps: false, planHiddenCharRefusal: false,
+  externalDriverContract: false, codexListFrameGuard: true, planEntryPriority: true,
 };
 test('reports the reviewed partial port honestly', () => {
-  assert.equal(reviewReference(metadata, review, observed), 'PHP behind TS: PARTIAL (28 contracts missing)');
+  assert.equal(reviewReference(metadata, review, observed), 'PHP behind TS: PARTIAL (41 contracts missing)');
   assert.deepEqual(Object.keys(contracts).sort(), Object.keys(observed).sort());
 });
 test('a newer published version refuses even if latest still names the reviewed release', () => {
-  assert.throws(() => reviewReference({...metadata, versions: {...metadata.versions, '0.48.0-alpha.1': {}}}, review, observed), /Unreviewed reference/);
+  assert.throws(() => reviewReference({...metadata, versions: {...metadata.versions, '0.49.0-alpha.1': {}}}, review, observed), /Unreviewed reference/);
 });
 test('a missing contract cannot disappear from the gap list', () => {
   assert.throws(() => reviewReference(metadata, {...review, knownMissing: review.knownMissing.slice(1)}, observed), /Unlisted missing/);
@@ -145,6 +149,49 @@ for (const [contract, since, gap] of [['childEnvCredentialList', '0.45.0', 'G-33
   });
   test(`${contract} cannot remain on the missing list`, () => {
     const knownMissing = [...review.knownMissing, {contract, since, gap}];
+    assert.throws(() => reviewReference(metadata, {...review, knownMissing}, observed), /Stale knownMissing/);
+  });
+}
+
+test('the previously reviewed 0.47.0 inventory no longer satisfies a 0.48.0 latest', () => {
+  assert.throws(() => reviewReference(metadata, {...review, reviewedLatest: '0.47.0'}, observed), /Latest reference needs a reviewed inventory change/);
+});
+
+for (const [contract, since, gap] of [
+  ['claudeOverloadedKind', '0.48.0', 'G-367'],
+  ['codexStatusKind', '0.48.0', 'G-367'],
+  ['turnFailureRetry', '0.48.0', 'G-367'],
+  ['sessionExitedCode', '0.48.0', 'G-367'],
+  ['turnFailureWireBounds', '0.48.0', 'G-372'],
+  ['rateLimitReading', '0.48.0', 'G-373'],
+  ['codexRateLimitWindows', '0.48.0', 'G-374'],
+  ['claudeRateLimitRejected', '0.48.0', 'G-374'],
+  ['claudeNoticeWindowName', '0.48.0', 'G-374'],
+  ['planTitlePrefix', '0.48.0', 'G-375'],
+  ['planGateCaps', '0.48.0', 'G-376'],
+  ['planHiddenCharRefusal', '0.48.0', 'G-377'],
+  ['externalDriverContract', '0.48.0', 'G-378'],
+]) {
+  test(`${contract} cannot silently disappear from the reviewed 0.48.0 gap inventory`, () => {
+    const knownMissing = review.knownMissing.filter(entry => entry.contract !== contract);
+    assert.throws(() => reviewReference(metadata, {...review, knownMissing}, observed), new RegExp(`Unlisted missing PHP contract: ${contract}`));
+  });
+  test(`${contract} is pinned to ${since} and ${gap}, and cannot stay listed once present`, () => {
+    const replace = change => ({...review, knownMissing: review.knownMissing.map(entry => entry.contract === contract ? {...entry, ...change} : entry)});
+    assert.equal(contracts[contract], since);
+    assert.throws(() => reviewReference(metadata, replace({since: '0.47.0'}), observed), new RegExp('Wrong reference release for ' + contract));
+    assert.throws(() => reviewReference(metadata, replace({gap: 'G-141'}), observed), new RegExp('Wrong gap citation for ' + contract));
+    assert.throws(() => reviewReference(metadata, review, {...observed, [contract]: true}), /Stale knownMissing/);
+  });
+}
+
+for (const [contract, gap] of [['codexListFrameGuard', 'G-342'], ['planEntryPriority', 'G-362']]) {
+  test(`the ${gap} fix (${contract}) cannot silently regress`, () => {
+    assert.equal(contracts[contract], '0.48.0');
+    assert.throws(() => reviewReference(metadata, review, {...observed, [contract]: false}), new RegExp('Unlisted missing PHP contract: ' + contract));
+  });
+  test(`the ${gap} fix (${contract}) cannot remain on the missing list`, () => {
+    const knownMissing = [...review.knownMissing, {contract, since: '0.48.0', gap}];
     assert.throws(() => reviewReference(metadata, {...review, knownMissing}, observed), /Stale knownMissing/);
   });
 }
