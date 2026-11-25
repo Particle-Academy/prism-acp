@@ -20,12 +20,12 @@ const observed = {
   claudeAccountSelection: false, childEnvCredentialList: true, claudeSharedSessions: false,
   claudeLaunchSettings: true, claudeBrowserSignIn: false,
   claudeOverloadedKind: false, codexStatusKind: false, turnFailureRetry: false, sessionExitedCode: false,
-  turnFailureWireBounds: false, rateLimitReading: false, codexRateLimitWindows: false, claudeRateLimitRejected: false,
-  claudeNoticeWindowName: false, planTitlePrefix: false, planGateCaps: false, planHiddenCharRefusal: false,
+  turnFailureWireBounds: true, rateLimitReading: false, codexRateLimitWindows: false, claudeRateLimitRejected: false,
+  claudeNoticeWindowName: false, planTitlePrefix: false, planGateCaps: true, planHiddenCharRefusal: true,
   externalDriverContract: false, codexListFrameGuard: true, planEntryPriority: true,
 };
 test('reports the reviewed partial port honestly', () => {
-  assert.equal(reviewReference(metadata, review, observed), 'PHP behind TS: PARTIAL (41 contracts missing)');
+  assert.equal(reviewReference(metadata, review, observed), 'PHP behind TS: PARTIAL (38 contracts missing)');
   assert.deepEqual(Object.keys(contracts).sort(), Object.keys(observed).sort());
 });
 test('a newer published version refuses even if latest still names the reviewed release', () => {
@@ -162,14 +162,11 @@ for (const [contract, since, gap] of [
   ['codexStatusKind', '0.48.0', 'G-367'],
   ['turnFailureRetry', '0.48.0', 'G-367'],
   ['sessionExitedCode', '0.48.0', 'G-367'],
-  ['turnFailureWireBounds', '0.48.0', 'G-372'],
   ['rateLimitReading', '0.48.0', 'G-373'],
   ['codexRateLimitWindows', '0.48.0', 'G-374'],
   ['claudeRateLimitRejected', '0.48.0', 'G-374'],
   ['claudeNoticeWindowName', '0.48.0', 'G-374'],
   ['planTitlePrefix', '0.48.0', 'G-375'],
-  ['planGateCaps', '0.48.0', 'G-376'],
-  ['planHiddenCharRefusal', '0.48.0', 'G-377'],
   ['externalDriverContract', '0.48.0', 'G-378'],
 ]) {
   test(`${contract} cannot silently disappear from the reviewed 0.48.0 gap inventory`, () => {
@@ -185,7 +182,7 @@ for (const [contract, since, gap] of [
   });
 }
 
-for (const [contract, gap] of [['codexListFrameGuard', 'G-342'], ['planEntryPriority', 'G-362']]) {
+for (const [contract, gap] of [['codexListFrameGuard', 'G-342'], ['planEntryPriority', 'G-362'], ['turnFailureWireBounds', 'G-372'], ['planGateCaps', 'G-376'], ['planHiddenCharRefusal', 'G-377']]) {
   test(`the ${gap} fix (${contract}) cannot silently regress`, () => {
     assert.equal(contracts[contract], '0.48.0');
     assert.throws(() => reviewReference(metadata, review, {...observed, [contract]: false}), new RegExp('Unlisted missing PHP contract: ' + contract));

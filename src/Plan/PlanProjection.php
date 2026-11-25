@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Prism\Acp\Plan;
 
 use Prism\Acp\Meta;
+use Prism\Acp\Support\HiddenCharacters;
 use Prism\Acp\Support\Js;
 use Prism\Acp\Text;
 
@@ -35,6 +36,28 @@ final class PlanProjection
 
     public const PRIORITY = 'medium';
 
+    /**
+     * The most entries AcpAgent sends in one plan update; more refuses the whole update, and that is reported. Above
+     * STEPS_MAX on purpose: that is the ceiling for plans this class builds, this is the gate's ceiling for whatever a
+     * driver hands it, including a model-written Codex plan.
+     */
+    public const ENTRIES_MAX = 256;
+
+    /** The longest plan entry `content` AcpAgent sends, in code points. Longer refuses the update. */
+    public const ENTRY_CONTENT_MAX = 1024;
+
+    /** The largest `_meta` AcpAgent sends on a plan update or one of its entries, in UTF-8 bytes of its JSON. */
+    public const META_MAX_BYTES = 16384;
+
+    /** The longest markdown plan `content` AcpAgent sends, in code points. */
+    public const MARKDOWN_MAX = 65536;
+
+    /** The longest markdown plan `path` AcpAgent sends, in code points. */
+    public const PATH_MAX = 4096;
+
+    /** The longest `planId` AcpAgent sends, in code points. */
+    public const ID_MAX = 256;
+
     public const UNTITLED = 'Untitled step';
 
     /**
@@ -54,10 +77,10 @@ final class PlanProjection
     private const ID = '/\A[A-Za-z0-9_.:-]{1,128}\z/';
 
     /**
-     * Replaced by a space in a title; the same set as prism-acp-ts's plan.ts HIDDEN (lone surrogates cannot occur in
-     * scrubbed UTF-8, so that range is not listed).
+     * Replaced by a space in a title; the same set as prism-acp-ts's plan.ts HIDDEN, spelled out in
+     * HiddenCharacters::PLAN (lone surrogates cannot occur in scrubbed UTF-8, so that range is not listed).
      */
-    private const HIDDEN = '/[\x{0000}-\x{001F}\x{007F}-\x{009F}\p{Cf}\x{FE00}-\x{FE0F}\x{E0100}-\x{E01EF}\x{034F}\x{180B}-\x{180F}\x{2800}\x{115F}\x{1160}\x{3164}\x{FFA0}\x{2028}\x{2029}]/u';
+    private const HIDDEN = HiddenCharacters::PLAN;
 
     private const LABEL = '/\A(?:\[failed\]|\[skipped\]|\(you\))/i';
 
