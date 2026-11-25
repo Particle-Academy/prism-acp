@@ -74,7 +74,7 @@ $pendingMetadata = null;
 $GLOBALS['owned_native_unlink_observations'] = [];
 $driver = new ClaudeDriver(new ClaudeDriverOptions(
     cwd: $config['root'], binary: $config['node'], binaryArgs: [$config['bridge'], $argv[1]],
-    parentEnv: getenv(), model: 'claude-sonnet-4-6', permissionMode: 'bypassPermissions',
+    parentEnv: getenv(), model: 'claude-sonnet-5-5', permissionMode: 'bypassPermissions',
     permissionPrompts: ($config['wildcard'] ?? false) ? ['*'] : ['Bash'],
     credentials: new ProviderCredentials('apiKey', 'prism-fake-not-a-real-key', $config['home']),
     permissionTimeoutSeconds: 1,
