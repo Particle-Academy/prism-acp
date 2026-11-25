@@ -844,8 +844,6 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
         if ($entries === false) {
             return false;
         }
-        // An owned directory left empty is retryable: its rmdir failed while a known entry was still pending.
-        $pending = true;
         try {
             while (($name = readdir($entries)) !== false) {
                 if ($name === '.' || $name === '..') {
@@ -864,7 +862,8 @@ final class ClaudeDriver implements AgentDriver, CancelsTurns, OwnsProcessTree, 
             closedir($entries);
         }
 
-        return $pending;
+        // Only known delete-pending entries, or none left at all: an owned directory left empty is retryable.
+        return true;
     }
 
     private function removeMcpConfig(bool $reportFailure = true): void
