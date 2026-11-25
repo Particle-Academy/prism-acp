@@ -25,6 +25,7 @@ jobs:
       - run: composer update --prefer-dist --no-interaction --no-progress
       - name: matrix
         run: |
+          set +e
           for mutant in 0 1; do
             G383_MUTANT=$mutant vendor/bin/pest tests/Unit/CredentialDescendantProtectionTest.php --filter 'descendant symlink' >/dev/null 2>&1; echo "RESULT new-test mutant=$mutant exit=$?"
             G383_MUTANT=$mutant vendor/bin/pest tests/Diagnostic/OriginalSymlinkTest.php --filter 'ORIGINAL' >/dev/null 2>&1; echo "RESULT old-test mutant=$mutant exit=$?"
