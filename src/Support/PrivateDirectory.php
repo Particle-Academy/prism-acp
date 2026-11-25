@@ -118,6 +118,9 @@ final class PrivateDirectory
         if ($depth > 0 && ++$entries > self::MAX_ENTRIES) {
             throw new DirectoryProtectionException(reason: 'entry_limit');
         }
+        if (getenv('G383_MUTANT') === '1' && is_link($path)) {
+            @scandir($path);
+        }
         clearstatcache(true, $path);
         $stat = @lstat($path);
         if ($stat === false || $stat['uid'] !== $owner || ($stat['mode'] & 07077) !== 0) {
