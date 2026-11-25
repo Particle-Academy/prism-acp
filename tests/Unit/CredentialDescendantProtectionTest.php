@@ -61,11 +61,26 @@ it('refuses a descendant symlink or reparse point without following its private 
     $target = PrivateDirectory::create('prism-acp-tree-target-');
     $alias = $tree->home.DIRECTORY_SEPARATOR.'link';
     CredentialPaths::link($target, $alias);
+    $posix = PHP_OS_FAMILY !== 'Windows';
+    if ($posix) {
+        // Under relatime a directory read updates atime only while atime <= mtime/ctime. create()'s own readdir already
+        // moved atime past both, so without this the target would hide a read through the link. Backdating re-arms it.
+        $past = time() - 3600;
+        expect(touch($target, $past, $past))->toBeTrue();
+    }
+    // Fresh readings only: a cached lstat from create() predates its readdir and differs in atime (G-383).
+    clearstatcache(true);
     $before = lstat($target);
     try {
         expect(fn () => PrivateDirectory::assertProtected($tree->home))->toThrow(DirectoryProtectionException::class);
-        clearstatcache(true, $target);
+        clearstatcache(true);
         expect(lstat($target))->toBe($before);
+        if ($posix) {
+            // The probe must be able to see the failure it guards against: a read THROUGH the link moves atime.
+            scandir($alias);
+            clearstatcache(true);
+            expect(lstat($target)['atime'])->not->toBe($before['atime']);
+        }
     } finally {
         CredentialPaths::unlink($alias);
         $tree->remove();
