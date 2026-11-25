@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Prism\Acp;
 
 use Prism\Acp\Support\Js;
+use Prism\Acp\Support\ProviderText;
 
 /**
  * Why a turn failed, when the provider said: carried on a TurnOutcome and on the error a failed `session/prompt`
@@ -36,6 +37,15 @@ final readonly class TurnFailure implements \JsonSerializable
         'unauthorized' => 'auth',
     ];
 
+    /** The five kinds a client acts on. A failure constructed with any other is sent as `other`. */
+    public const KINDS = ['rate_limit', 'overloaded', 'auth', 'billing', 'other'];
+
+    /** The last instant a JavaScript Date can hold, in epoch milliseconds. */
+    public const MAX_DATE_MS = 8_640_000_000_000_000;
+
+    /** The bound on the reason the wire carries: provider text's bound plus its marker, so bounded text is unchanged. */
+    private const WIRE_TEXT_MAX = ProviderText::MAX + 12;
+
     public function __construct(
         /** The provider's own reason, verbatim. */
         public string $reason,
@@ -66,13 +76,29 @@ final readonly class TurnFailure implements \JsonSerializable
         return new self($reason, self::CODEX_KINDS[$reason] ?? 'other');
     }
 
+    /**
+     * This failure as the wire carries it, or null when it names no reason: then no failure data is sent, as for a
+     * turn the provider gave no reason for. Ported from prism-acp-ts's wireTurnFailure; see jsonSerialize.
+     */
+    public function wire(): ?\stdClass
+    {
+        return $this->reason === '' ? null : $this->jsonSerialize();
+    }
+
+    /**
+     * The wire form, rebuilt from the documented fields and nothing else, each checked: the reason marked and bounded
+     * as provider text (ProviderText::bound), the kind one of KINDS (any other is `other`), and the reset only when
+     * it is a date JavaScript can hold (0 to MAX_DATE_MS), rounded up to a whole millisecond, so a client's
+     * `new Date(resetsAtMs).toISOString()` never throws. Whoever constructed the failure, this is what is sent.
+     */
     public function jsonSerialize(): \stdClass
     {
         $out = new \stdClass;
-        $out->reason = $this->reason;
-        $out->kind = $this->kind;
-        if ($this->resetsAtMs !== null) {
-            $out->resetsAtMs = $this->resetsAtMs;
+        $out->reason = ProviderText::bound($this->reason, self::WIRE_TEXT_MAX);
+        $out->kind = in_array($this->kind, self::KINDS, true) ? $this->kind : 'other';
+        $reset = $this->resetsAtMs;
+        if ($reset !== null && is_finite((float) $reset) && $reset >= 0 && $reset <= self::MAX_DATE_MS) {
+            $out->resetsAtMs = is_int($reset) ? $reset : (int) ceil($reset);
         }
 
         return $out;

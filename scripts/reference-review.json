@@ -34,14 +34,11 @@
     {"contract": "codexStatusKind", "since": "0.48.0", "gap": "G-367"},
     {"contract": "turnFailureRetry", "since": "0.48.0", "gap": "G-367"},
     {"contract": "sessionExitedCode", "since": "0.48.0", "gap": "G-367"},
-    {"contract": "turnFailureWireBounds", "since": "0.48.0", "gap": "G-372"},
     {"contract": "rateLimitReading", "since": "0.48.0", "gap": "G-373"},
     {"contract": "codexRateLimitWindows", "since": "0.48.0", "gap": "G-374"},
     {"contract": "claudeRateLimitRejected", "since": "0.48.0", "gap": "G-374"},
     {"contract": "claudeNoticeWindowName", "since": "0.48.0", "gap": "G-374"},
     {"contract": "planTitlePrefix", "since": "0.48.0", "gap": "G-375"},
-    {"contract": "planGateCaps", "since": "0.48.0", "gap": "G-376"},
-    {"contract": "planHiddenCharRefusal", "since": "0.48.0", "gap": "G-377"},
     {"contract": "externalDriverContract", "since": "0.48.0", "gap": "G-378"}
   ]
 }
