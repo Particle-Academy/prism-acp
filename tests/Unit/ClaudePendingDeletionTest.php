@@ -79,8 +79,18 @@ it('bounds pending known approval-file cleanup without blocking the event loop',
             ->and($second->toArray())->toBe($verdict->toArray())->and($expectedRemovalWarnings)->toBeGreaterThan(0);
         echo json_encode(['ownedPendingCleanup' => ['fault' => $fault, 'elapsedSeconds' => $elapsed, 'heartbeat' => $heartbeat, 'directoryGone' => ! is_dir($directory)]], JSON_THROW_ON_ERROR)."\n";
         if ($fault === 'transient') {
-            expect(is_dir($directory))->toBeFalse()->and($elapsed)->toBeGreaterThanOrEqual(0.45)->toBeLessThan(3.0)
-                ->and($heartbeat)->toBe(1)->and($problems)->toBe([]);
+            // The driver's verdict first: no reported problem means its own removal succeeded inside the bound. Read
+            // the directory after that, for up to a second: a directory removed while another process (an indexer or a
+            // scanner) holds a handle to it stays in its parent until that handle closes. One still present after the
+            // wait, or a reported problem, is a real failure. main CI (Windows, PHP 8.5, 2026-11-24) once saw the
+            // directory present here, and the old assertion order could not say which of the two it was.
+            expect($problems)->toBe([])->and($elapsed)->toBeGreaterThanOrEqual(0.45)->toBeLessThan(3.0)->and($heartbeat)->toBe(1);
+            $settled = microtime(true) + 1.0;
+            while (is_dir($directory) && microtime(true) < $settled) {
+                usleep(20_000);
+                clearstatcache(true, $directory);
+            }
+            expect(is_dir($directory))->toBeFalse();
         } else {
             expect(is_dir($directory))->toBeTrue()->and($problems)->toHaveCount(1)
                 ->and($problems[0]['recoverable'])->toBeFalse()->and($problems[0]['message'])->not->toContain($directory)

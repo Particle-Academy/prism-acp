@@ -1,6 +1,6 @@
 {
   "goldenBaseline": "0.25.1",
-  "reviewedLatest": "0.47.0",
+  "reviewedLatest": "0.48.0",
   "knownMissing": [
     {"contract": "readRateLimits", "since": "0.26.0", "gap": "G-141"},
     {"contract": "mcpServerStatus", "since": "0.27.0", "gap": "G-141"},
@@ -29,6 +29,19 @@
     {"contract": "driverLiveness", "since": "0.44.0", "gap": "G-332"},
     {"contract": "claudeAccountSelection", "since": "0.45.0", "gap": "G-333"},
     {"contract": "claudeSharedSessions", "since": "0.46.0", "gap": "G-335"},
-    {"contract": "claudeBrowserSignIn", "since": "0.47.0", "gap": "G-337"}
+    {"contract": "claudeBrowserSignIn", "since": "0.47.0", "gap": "G-337"},
+    {"contract": "claudeOverloadedKind", "since": "0.48.0", "gap": "G-367"},
+    {"contract": "codexStatusKind", "since": "0.48.0", "gap": "G-367"},
+    {"contract": "turnFailureRetry", "since": "0.48.0", "gap": "G-367"},
+    {"contract": "sessionExitedCode", "since": "0.48.0", "gap": "G-367"},
+    {"contract": "turnFailureWireBounds", "since": "0.48.0", "gap": "G-372"},
+    {"contract": "rateLimitReading", "since": "0.48.0", "gap": "G-373"},
+    {"contract": "codexRateLimitWindows", "since": "0.48.0", "gap": "G-374"},
+    {"contract": "claudeRateLimitRejected", "since": "0.48.0", "gap": "G-374"},
+    {"contract": "claudeNoticeWindowName", "since": "0.48.0", "gap": "G-374"},
+    {"contract": "planTitlePrefix", "since": "0.48.0", "gap": "G-375"},
+    {"contract": "planGateCaps", "since": "0.48.0", "gap": "G-376"},
+    {"contract": "planHiddenCharRefusal", "since": "0.48.0", "gap": "G-377"},
+    {"contract": "externalDriverContract", "since": "0.48.0", "gap": "G-378"}
   ]
 }
