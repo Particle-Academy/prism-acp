@@ -26,6 +26,8 @@ static class OwnedFileDiagnostic
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateFileW(string path, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
 
     static void Emit(object value) { Console.WriteLine(new JavaScriptSerializer().Serialize(value)); Console.Out.Flush(); }
+    // Why the holder gave up before its ready line, on stderr so stdout keeps one JSON line per answer (G-384).
+    static int Refuse(string reason, int code, int win32) { Console.Error.WriteLine(new JavaScriptSerializer().Serialize(new { holderFailure = reason, win32 = win32 })); Console.Error.Flush(); return code; }
     static string OwnedPath(string root)
     {
         string full = Path.GetFullPath(root), temporary = Path.GetFullPath(Path.GetTempPath()).TrimEnd('\\', '/');
@@ -128,10 +130,17 @@ static class OwnedFileDiagnostic
                     }
                     return 0;
                 }
-                if (args[1] != "hold-empty-control" || new FileInfo(path).Length != 0) return 2;
+                if (args[1] != "hold-empty-control") return Refuse("mode", 2, 0);
+                if (new FileInfo(path).Length != 0) return Refuse("not-empty", 2, 0);
                 IntPtr handle = CreateFileW(path, 0x80, 7, IntPtr.Zero, 3, 0x00200000, IntPtr.Zero);
-                if (handle == IntPtr.Zero || handle == new IntPtr(-1)) return 3;
-                try { Emit(new { holderReady = true, pid = System.Diagnostics.Process.GetCurrentProcess().Id }); Console.ReadLine(); }
+                if (handle == IntPtr.Zero || handle == new IntPtr(-1)) return Refuse("create-file", 3, Marshal.GetLastWin32Error());
+                try
+                {
+                    // startupMs: this process's own age when ready, so a slow start is told apart from a slow launch.
+                    var self = System.Diagnostics.Process.GetCurrentProcess();
+                    Emit(new { holderReady = true, pid = self.Id, startupMs = (long)(DateTime.Now - self.StartTime).TotalMilliseconds });
+                    Console.ReadLine();
+                }
                 finally { CloseHandle(handle); }
             }
             else { Attributes(path); FileUsers(path); }
