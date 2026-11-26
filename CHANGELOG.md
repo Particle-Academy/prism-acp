@@ -8,6 +8,7 @@
 - The plan gate refuses control characters, matching the TypeScript reference: a `planId` or markdown `path` with a control, format or invisible character, and markdown `content` with a control or bidi character or a bare CR. Text that is not valid UTF-8 is refused. The sets are spelled out in `Support\HiddenCharacters` and checked on every code point against the reference's own (G-377).
 - Plan updates are sent as built from their checked fields. A `_meta` is sent as it serialized when it was checked. Every other update is sent as its serialization read back. A read or serialization that throws refuses the update and is reported, and nothing is thrown into the driver (G-376).
 - The turn failure a client receives on `session/prompt` is rebuilt from its documented fields (`TurnFailure::wire`). The kind is one of the five or `other`, a reset is sent only when it is a JavaScript date (rounded up), and the reason is marked and bounded as provider text (`Support\ProviderText`) (G-372).
+- `Support\ProviderText::bound` decodes and marks only the prefix the bound can reach, so its work and memory are proportional to the bound, not to the size of the provider text. Before, a very large turn failure reason was held whole as characters and could exhaust memory.
 - Claude launches pass exactly one `--settings` value, with `disableRemoteControl: true`. Claude and Codex refuse the `binaryArgs` the reference refuses, with `RemoteControlRefused`, before any process starts. Every Codex frame passes a `remoteControl/*` check before it is written.
 - Codex transports refuse list frames. A frame is serialized once, and the bytes that were checked are the bytes written.
 - `ChildEnv` withholds the reference's full credential list, and compares names with the reference's Unicode case mapping.
@@ -30,6 +31,13 @@
 - `Plan\PlanProjection` turns a plan snapshot into `plan`, or into `plan_update` for a client that advertised `clientCapabilities.plan`. Failed and skipped steps are shown unchecked and labelled `[failed]` or `[skipped]`, never `completed`. Each step's real state is in `_meta["particle.academy/plan_step"]` (G-360).
 - A driver's options now include `clientCapabilities: {plan: bool}`, read from the client's `initialize`.
 - `AcpAgent` checks every plan update a driver sends. It never sends `plan_update` or `plan_removed` to a client that did not advertise `plan`; an items `plan_update` is sent as `plan` instead, and anything else is dropped and reported. An entry without a valid priority is sent as `medium`, and that is reported.
+
+### Other
+
+- The reference review covers the TypeScript package through 0.48.0 (the 0.47.0 and 0.48.0 reviews), without advancing goldens.
+- A retired model id in a test fixture was replaced (G-369).
+- Two flaky tests were fixed, with no product change: the descendant-symlink protection test now detects a read through the link instead of comparing a cached access time (G-383), and the Windows pending-deletion test's file holder writes its ready line without a slow serializer load and reports why it was not ready (G-384).
+- CI and publish pin the organisation's third-party checks to d368b81.
 
 ## 0.1.2
 
