@@ -26,16 +26,8 @@ it('bounds pending known approval-file cleanup without blocking the event loop',
     $handlerInstalled = false;
     try {
         $holder = WindowsProviderProcess::launch(ownedNativeFileDiagnosticExecutable(), [$directory, 'hold-empty-control'], sys_get_temp_dir(), ChildEnv::build(getenv())->env);
-        $out = '';
-        $deadline = microtime(true) + 5;
-        while (! str_contains($out, "\n") && $holder->isOpen() && microtime(true) < $deadline) {
-            foreach ($holder->read(0.02) as [$kind, $bytes]) {
-                if ($kind === 'stdout') {
-                    $out .= $bytes;
-                }
-            }
-        }
-        expect(json_decode(trim($out), true, flags: JSON_THROW_ON_ERROR)['holderReady'])->toBeTrue();
+        $ready = awaitOwnedHolderReady($holder, 5.0);
+        expect($ready['holderReady'])->toBeTrue();
         if ($fault === 'unknown') {
             fclose(fopen($unknown, 'x'));
         }
@@ -88,7 +80,8 @@ it('bounds pending known approval-file cleanup without blocking the event loop',
         clearstatcache(true, $directory);
         expect($verdict->toArray())->toBe(['graceful' => true, 'empty' => true, 'survivors' => 0, 'verified' => true])
             ->and($second->toArray())->toBe($verdict->toArray())->and($expectedRemovalWarnings)->toBeGreaterThan(0);
-        echo json_encode(['ownedPendingCleanup' => ['fault' => $fault, 'elapsedSeconds' => $elapsed, 'heartbeat' => $heartbeat, 'directoryGone' => ! is_dir($directory)]], JSON_THROW_ON_ERROR)."\n";
+        echo json_encode(['ownedPendingCleanup' => ['fault' => $fault, 'elapsedSeconds' => $elapsed, 'heartbeat' => $heartbeat, 'directoryGone' => ! is_dir($directory),
+            'holderReadySeconds' => $ready['readySeconds'], 'holderStartupMs' => $ready['startupMs'] ?? null]], JSON_THROW_ON_ERROR)."\n";
         if ($fault === 'transient' || $fault === 'released') {
             // The driver's verdict first: no reported problem means its own removal succeeded inside the bound. Read
             // the directory after that, for up to a second: a directory removed while another process (an indexer or a
@@ -132,3 +125,31 @@ it('bounds pending known approval-file cleanup without blocking the event loop',
         expect(PrivateDirectory::remove($directory, ...[...$files, $unknown]))->toBeTrue();
     }
 })->with(['transient', 'released', 'persistent', 'unknown']);
+
+it('reports why the file holder never became ready instead of decoding an empty line', function (): void {
+    if (PHP_OS_FAMILY !== 'Windows') {
+        $this->markTestSkipped('actual Windows share-delete handles only');
+    }
+    // G-384: CI once saw `json_decode('')` throw "Syntax error" here, which said nothing about the holder. A NON-empty
+    // approve.php makes the real holder refuse and exit 2 before it prints, which is that same empty-stdout path.
+    $directory = PrivateDirectory::create('prism-acp-approve-');
+    $file = $directory.DIRECTORY_SEPARATOR.'approve.php';
+    file_put_contents($file, 'x');
+    $holder = WindowsProviderProcess::launch(ownedNativeFileDiagnosticExecutable(), [$directory, 'hold-empty-control'], sys_get_temp_dir(), ChildEnv::build(getenv())->env);
+    try {
+        $failure = null;
+        try {
+            awaitOwnedHolderReady($holder, 30.0);
+        } catch (Throwable $e) {
+            $failure = $e;
+        }
+        expect($failure)->toBeInstanceOf(RuntimeException::class)
+            ->and($failure?->getMessage())->toContain('the file holder printed no ready line')
+            ->toContain('exited with code 2')
+            ->toContain('"holderFailure":"not-empty"');
+    } finally {
+        $stop = $holder->stop(0);
+        expect($stop->verified)->toBeTrue()->and($stop->survivors)->toBe(0)
+            ->and(PrivateDirectory::remove($directory, $file))->toBeTrue();
+    }
+});

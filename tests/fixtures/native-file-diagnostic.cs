@@ -26,6 +26,17 @@ static class OwnedFileDiagnostic
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateFileW(string path, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
 
     static void Emit(object value) { Console.WriteLine(new JavaScriptSerializer().Serialize(value)); Console.Out.Flush(); }
+    // The holder's two lines are written by hand, not with JavaScriptSerializer (G-384). On a cold windows-latest runner
+    // the first JavaScriptSerializer use in a process loads System.Web.Extensions and took 0.3 s to 2.2 s, measured on
+    // CI, while the process itself was running in under 0.15 s; that tail is what outran the test's 5 s ready wait.
+    // Only constant ASCII names and integers go into these lines, so there is nothing to escape.
+    static void Line(TextWriter writer, string json) { writer.Write(json + "\n"); writer.Flush(); }
+    // Why the holder gave up before its ready line, on stderr so stdout keeps one JSON line per answer.
+    static int Refuse(string reason, int code, int win32)
+    {
+        Line(Console.Error, "{\"holderFailure\":\"" + reason + "\",\"win32\":" + win32.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}");
+        return code;
+    }
     static string OwnedPath(string root)
     {
         string full = Path.GetFullPath(root), temporary = Path.GetFullPath(Path.GetTempPath()).TrimEnd('\\', '/');
@@ -128,10 +139,19 @@ static class OwnedFileDiagnostic
                     }
                     return 0;
                 }
-                if (args[1] != "hold-empty-control" || new FileInfo(path).Length != 0) return 2;
+                if (args[1] != "hold-empty-control") return Refuse("mode", 2, 0);
+                if (new FileInfo(path).Length != 0) return Refuse("not-empty", 2, 0);
                 IntPtr handle = CreateFileW(path, 0x80, 7, IntPtr.Zero, 3, 0x00200000, IntPtr.Zero);
-                if (handle == IntPtr.Zero || handle == new IntPtr(-1)) return 3;
-                try { Emit(new { holderReady = true, pid = System.Diagnostics.Process.GetCurrentProcess().Id }); Console.ReadLine(); }
+                if (handle == IntPtr.Zero || handle == new IntPtr(-1)) return Refuse("create-file", 3, Marshal.GetLastWin32Error());
+                try
+                {
+                    // startupMs: this process's own age when ready, so a slow start is told apart from a slow launch.
+                    var self = System.Diagnostics.Process.GetCurrentProcess();
+                    var invariant = System.Globalization.CultureInfo.InvariantCulture;
+                    Line(Console.Out, "{\"holderReady\":true,\"pid\":" + self.Id.ToString(invariant) + ",\"startupMs\":"
+                        + ((long)(DateTime.Now - self.StartTime).TotalMilliseconds).ToString(invariant) + "}");
+                    Console.ReadLine();
+                }
                 finally { CloseHandle(handle); }
             }
             else { Attributes(path); FileUsers(path); }
