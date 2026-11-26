@@ -81,7 +81,7 @@ it('bounds pending known approval-file cleanup without blocking the event loop',
         expect($verdict->toArray())->toBe(['graceful' => true, 'empty' => true, 'survivors' => 0, 'verified' => true])
             ->and($second->toArray())->toBe($verdict->toArray())->and($expectedRemovalWarnings)->toBeGreaterThan(0);
         echo json_encode(['ownedPendingCleanup' => ['fault' => $fault, 'elapsedSeconds' => $elapsed, 'heartbeat' => $heartbeat, 'directoryGone' => ! is_dir($directory),
-            'holderReadySeconds' => $ready['readySeconds'], 'holderStartupMs' => $ready['startupMs'] ?? null]], JSON_THROW_ON_ERROR)."\n";
+            'holderReadySeconds' => $ready['readySeconds'], 'holderStartupMs' => $ready['startupMs'] ?? null, 'holderSerializerMs' => $ready['serializerMs'] ?? null]], JSON_THROW_ON_ERROR)."\n";
         if ($fault === 'transient' || $fault === 'released') {
             // The driver's verdict first: no reported problem means its own removal succeeded inside the bound. Read
             // the directory after that, for up to a second: a directory removed while another process (an indexer or a

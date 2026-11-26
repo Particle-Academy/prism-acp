@@ -138,7 +138,10 @@ static class OwnedFileDiagnostic
                 {
                     // startupMs: this process's own age when ready, so a slow start is told apart from a slow launch.
                     var self = System.Diagnostics.Process.GetCurrentProcess();
-                    Emit(new { holderReady = true, pid = self.Id, startupMs = (long)(DateTime.Now - self.StartTime).TotalMilliseconds });
+                    long startupMs = (long)(DateTime.Now - self.StartTime).TotalMilliseconds;
+                    new JavaScriptSerializer().Serialize(new { warm = true });
+                    long serializerMs = (long)(DateTime.Now - self.StartTime).TotalMilliseconds - startupMs;
+                    Emit(new { holderReady = true, pid = self.Id, startupMs = startupMs, serializerMs = serializerMs });
                     Console.ReadLine();
                 }
                 finally { CloseHandle(handle); }
